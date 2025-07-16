@@ -61,15 +61,7 @@ export default function Login() {
       await loginUser(formData.email, formData.password)
       router.push("/") // Redirect to home page after successful login
     } catch (error: any) {
-      if (error.code === "auth/wrong-password" || error.code === "auth/invalid-credential") {
-        setError("Wrong password, try again.")
-      } else if (error.code === "auth/user-not-found") {
-        setError("No user found with this email.")
-      } else if (error.code === "auth/invalid-email") {
-        setError("Invalid email address.")
-      } else {
-        setError("Login failed. Please try again.")
-      }
+      setError(error.message || "Login failed. Please try again.")
     } finally {
       setLoading(false)
     }

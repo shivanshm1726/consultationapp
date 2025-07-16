@@ -1,6 +1,15 @@
-import { initializeApp } from "firebase/app"
+import { initializeApp, getApps, getApp } from "firebase/app"
 import { getAuth } from "firebase/auth"
 import { getFirestore } from "firebase/firestore"
+
+// Helper function to ensure environment variables are present
+const requiredEnv = (key: string) => {
+  const value = process.env[key]
+  if (!value) {
+    throw new Error(`Missing environment variable: ${key}`)
+  }
+  return value
+}
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -12,12 +21,8 @@ const firebaseConfig = {
 }
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig)
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApp()
+const auth = getAuth(app)
+const db = getFirestore(app)
 
-// Initialize Firebase Authentication and get a reference to the service
-export const auth = getAuth(app)
-
-// Initialize Cloud Firestore and get a reference to the service
-export const db = getFirestore(app)
-
-export default app
+export { app, auth, db }
