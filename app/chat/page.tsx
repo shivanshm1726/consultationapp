@@ -31,8 +31,9 @@ import { onAuthStateChanged } from "firebase/auth"
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-export default function LiveChat() {
+function LiveChatContent() {
   const [chatStarted, setChatStarted] = useState(false)
   const [message, setMessage] = useState("")
   const [messages, setMessages] = useState<any[]>([])
@@ -725,5 +726,17 @@ export default function LiveChat() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LiveChat() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    }>
+      <LiveChatContent />
+    </Suspense>
   )
 }
