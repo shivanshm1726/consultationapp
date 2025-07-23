@@ -1,5 +1,8 @@
 "use client"
 
+
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import type React from "react"
 import { useState } from "react"
 import Link from "next/link"
@@ -52,20 +55,41 @@ export default function Login() {
     setShowPassword((prev) => !prev)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError("")
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
+  setError("");
 
-    try {
-      await loginUser(formData.email, formData.password)
-      router.push("/") // Redirect to home page after successful login
-    } catch (error: any) {
-      setError(error.message || "Login failed. Please try again.")
-    } finally {
-      setLoading(false)
+  try {
+    const userCredential = await loginUser(formData.email, formData.password);
+    const user = userCredential;
+
+    // 🔄 Fetch user role from Firestore
+    const docRef = doc(db, "users", user.uid);
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      throw new Error("User profile not found in Firestore");
     }
+
+    const userData = docSnap.data();
+    const role = userData.role;
+
+    // ✅ Redirect based on role
+    if (role === "admin") {
+      router.push("/admin/dashboard");
+    } else if (role === "receptionist") {
+      router.push("/reception");
+    } else {
+      router.push("/"); // patient
+    }
+
+  } catch (error: any) {
+    setError(error.message || "Login failed.");
+  } finally {
+    setLoading(false);
   }
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-slate-50 to-teal-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-700">
@@ -219,10 +243,10 @@ export default function Login() {
                 📞 9258924611
               </a>
               <a
-                href="mailto:dermanitin@gmail.com"
+                href="mailto:drnitinmishraderma@gmail.com"
                 className="text-indigo-600 hover:text-indigo-700 font-medium dark:text-indigo-400 dark:hover:text-indigo-300"
               >
-                ✉️ dermanitin@gmail.com
+                ✉️ drnitinmishraderma@gmail.com
               </a>
             </div>
           </div>
