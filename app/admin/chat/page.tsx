@@ -28,9 +28,6 @@ import { useTheme } from "next-themes"
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, deleteDoc, getDocs } from "firebase/firestore"
 import { db, auth } from "@/lib/firebase"
 import { onAuthStateChanged } from "firebase/auth"
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { useSearchParams } from "next/navigation";
 
 export default function LiveChat() {
   const [chatStarted, setChatStarted] = useState(false)
@@ -41,10 +38,6 @@ export default function LiveChat() {
   const [isLoading, setIsLoading] = useState(false)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const router = useRouter()
-  const doctorEmail = process.env.NEXT_PUBLIC_DOCTOR_EMAIL!;
-  // Get logged in user
-  const [user] = useAuthState(auth);
-  const searchParams = useSearchParams();
 
   const doctorQuickReplies = [
     "How can I help you?",
@@ -140,60 +133,6 @@ export default function LiveChat() {
       setFormErrors((prev) => ({ ...prev, [field]: "" }))
     }
   }
-
-
-  const handleFileChange = async (
-  e: React.ChangeEvent<HTMLInputElement>,user: any, searchParams: ReturnType<typeof useSearchParams>
-) => {
-  const files = e.target.files;
-  if (!files || files.length === 0) return;
-
-  const senderEmail = user.email!;
-  const otherUserEmail = searchParams.get("user"); // This comes from ?user=xyz@example.com in URL
-
-  const currentPatientEmail =
-    senderEmail === doctorEmail ? otherUserEmail : senderEmail;
-
-  if (!currentPatientEmail) {
-    alert("Patient email missing in URL or auth state.");
-    return;
-  }
-
-  const receiverEmail =
-    senderEmail === doctorEmail ? currentPatientEmail : doctorEmail;
-
-  const chatId = `${senderEmail}_to_${receiverEmail}`;
-
-  const storage = getStorage();
-
-  for (const file of files) {
-    const storageRef = ref(
-      storage,
-      `chatMedia/${chatId}/${Date.now()}-${file.name}`
-    );
-
-    await uploadBytes(storageRef, file);
-    const fileURL = await getDownloadURL(storageRef);
-
-    const mediaType = file.type.startsWith("image/")
-      ? "image"
-      : file.type.startsWith("video/")
-      ? "video"
-      : "file";
-
-    await addDoc(collection(db, "chats", chatId, "messages"), {
-      sender: senderEmail,
-      timestamp: serverTimestamp(),
-      mediaUrl: fileURL,
-      mediaType,
-      fileName: file.name,
-    });
-  }
-
-  // Clear the file input after uploading
-  e.target.value = "";
-};
-
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -555,50 +494,27 @@ export default function LiveChat() {
                 </div>
               )}
 
-              {messages.map((msg) => (
-  <div key={msg.id} className={`flex ${msg.sender === user?.email ? 'justify-end' : 'justify-start'} mb-2`}>
-    <div className="bg-blue-500 text-white p-2 rounded-lg max-w-[70%] break-words">
-
-      {/* Text message */}
-      {msg.text && <p>{msg.text}</p>}
-
-      {/* Image file */}
-      {msg.mediaType === "image" && (
-        <img
-          src={msg.mediaUrl}
-          alt={msg.fileName}
-          className="mt-2 rounded-md max-w-full max-h-64"
-        />
-      )}
-
-      {/* Video file */}
-      {msg.mediaType === "video" && (
-        <video
-          controls
-          src={msg.mediaUrl}
-          className="mt-2 rounded-md max-w-full max-h-64"
-        />
-      )}
-
-      {/* Other file types */}
-      {msg.mediaType === "file" && (
-        <a
-          href={msg.mediaUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 underline text-sm block text-white"
-        >
-          📎 {msg.fileName}
-        </a>
-      )}
-
-      <p className="text-[10px] text-white mt-1 text-right">
-        {msg.timestamp?.toDate?.().toLocaleTimeString()}
-      </p>
-    </div>
-  </div>
-))}
-
+              {messages.map((msg, idx) => (
+                <div
+                  key={msg.id || idx}
+                  className={`flex ${msg.sender === currentUser?.email ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg shadow-sm ${
+                      msg.sender === currentUser?.email
+                        ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white"
+                        : msg.sender === "system"
+                          ? "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-700"
+                          : "bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border dark:border-gray-700"
+                    }`}
+                  >
+                    <p className="text-sm leading-relaxed">{msg.text}</p>
+                    <p className="text-xs mt-1 opacity-70">
+                      {msg.timestamp?.toDate?.()?.toLocaleTimeString?.() ?? new Date().toLocaleTimeString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
               <div ref={messagesEndRef} />
             </CardContent>
 
@@ -647,7 +563,6 @@ export default function LiveChat() {
                 className="hidden"
                 accept="image/*,video/*,.pdf,.doc,.docx"
                 multiple
-                onChange={(e)=>handleFileChange(e,user, searchParams)}
               />
             </div>
           </Card>

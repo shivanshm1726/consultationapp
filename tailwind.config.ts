@@ -8,7 +8,12 @@ const config: Config = {
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
+<<<<<<< HEAD
+    "*.{js,ts,jsx,tsx,mdx}",
+	"./hooks/**/*.{ts,tsx,js,jsx}",
+=======
     "*.{js,ts,jsx,tsx,mdx}"
+>>>>>>> 372002936dc4368a951e078215a9dee8ab1bbf2a
   ],
   theme: {
   	extend: {
