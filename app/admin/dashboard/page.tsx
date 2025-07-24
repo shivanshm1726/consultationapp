@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { useAuthState } from "react-firebase-hooks/auth"
-import { collection, query, where, getDocs, orderBy, limit, Timestamp, doc, updateDoc } from "firebase/firestore"
+import { collection, query, where, getDocs, orderBy, limit, Timestamp, doc, updateDoc, getDoc } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
 import {
   Users,
@@ -40,6 +40,7 @@ interface RecentActivity {
 }
 
 interface UserRecord {
+  protected: boolean
   id: string
   fullName: string
   email: string
@@ -177,7 +178,18 @@ export default function AdminDashboard() {
   const handleRoleChange = async (uid: string, role: UserRecord["role"]) => {
     try {
       setUpdating(uid)
-      await updateDoc(doc(db, "users", uid), { role })
+
+      const userRef = doc(db, "users", uid)
+      const userSnap = await getDoc(userRef)
+      const userData = userSnap.data()
+
+      // 🔒 Prevent role change for protected users or hardcoded admin
+      if (userData?.protected || userData?.email === "drnitinmishraderma@gmail.com") {
+        alert("This account role is protected and cannot be modified.")
+        return
+      }
+
+      await updateDoc(userRef, { role })
       await fetchUsers()
     } catch (error) {
       console.error("Error updating user role:", error)
@@ -185,7 +197,6 @@ export default function AdminDashboard() {
       setUpdating(null)
     }
   }
-
   const filteredUsers = allUsers.filter(
     (u) =>
       u.email.toLowerCase().includes(search.toLowerCase()) || u.fullName.toLowerCase().includes(search.toLowerCase()),
@@ -563,21 +574,32 @@ export default function AdminDashboard() {
                           </Badge>
                         </td>
                         <td className="p-3">
-                          <select
-                            className="border border-gray-300 dark:border-gray-600 px-3 py-2 rounded-md bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            value={userRecord.role}
-                            disabled={updating === userRecord.id}
-                            onChange={(e) => handleRoleChange(userRecord.id, e.target.value as UserRecord["role"])}
-                          >
-                            <option value="patient">Patient</option>
-                            <option value="receptionist">Receptionist</option>
-                            <option value="admin">Admin</option>
-                          </select>
-                          {updating === userRecord.id && (
-                            <div className="ml-2 inline-block">
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                            </div>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <select
+                              className="border border-gray-300 dark:border-gray-600 px-3 py-2 rounded-md bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              value={userRecord.role}
+                              disabled={
+                                updating === userRecord.id ||
+                                userRecord.protected ||
+                                userRecord.email === "drnitinmishraderma@gmail.com"
+                              }
+                              onChange={(e) => handleRoleChange(userRecord.id, e.target.value as UserRecord["role"])}
+                            >
+                              <option value="patient">Patient</option>
+                              <option value="receptionist">Receptionist</option>
+                              <option value="admin">Admin</option>
+                            </select>
+
+                            {(userRecord.protected || userRecord.email === "drnitinmishraderma@gmail.com") && (
+                              <span title="Protected admin account" className="text-gray-400 text-sm">🔒</span>
+                            )}
+
+                            {updating === userRecord.id && (
+                              <div className="ml-2 inline-block">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                              </div>
+                            )}
+                          </div>
                         </td>
                       </motion.tr>
                     ))}

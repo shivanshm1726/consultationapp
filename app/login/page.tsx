@@ -1,95 +1,88 @@
 "use client"
 
-
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type React from "react"
-import { useState } from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Eye, EyeOff, Mail, Lock } from "lucide-react"
-import { useTheme } from "next-themes"
-import { useEffect } from "react"
-import { ArrowLeft, User, Stethoscope } from "lucide-react"
-import { loginUser } from "@/lib/auth"
-import { useAuth } from "@/contexts/auth-context"
+import type React from "react";
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Eye, EyeOff, Mail, Lock } from "lucide-react";
+import { useTheme } from "next-themes";
+import { useEffect } from "react";
+import { ArrowLeft, User, Stethoscope } from "lucide-react";
+import { loginUser } from "@/lib/auth";
+import { useAuth } from "@/contexts/auth-context";
 
 export default function Login() {
-  const [showPassword, setShowPassword] = useState(false)
-  const [mounted, setMounted] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  const { theme, setTheme } = useTheme()
-  const router = useRouter()
-  const { user } = useAuth()
+  const [showPassword, setShowPassword] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const { theme, setTheme } = useTheme();
+  const router = useRouter();
+  const { user } = useAuth();
 
   useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // Redirect if already logged in
-  useEffect(() => {
-    if (user) {
-      router.push("/")
-    }
-  }, [user, router])
+    setMounted(true);
+  }, []);
 
   const [formData, setFormData] = useState({
     email: "",
     password: "",
-  })
+  });
 
   const handleInputChange = (field: "email" | "password", value: string) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
-    }))
-    setError("") // Clear error when user types
-  }
+    }));
+    setError("");
+  };
 
   const togglePasswordVisibility = () => {
-    setShowPassword((prev) => !prev)
-  }
+    setShowPassword((prev) => !prev);
+  };
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setLoading(true);
-  setError("");
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
-  try {
-    const userCredential = await loginUser(formData.email, formData.password);
-    const user = userCredential;
+    try {
+      const userCredential = await loginUser(formData.email, formData.password);
+      const user = userCredential;
 
-    // 🔄 Fetch user role from Firestore
-    const docRef = doc(db, "users", user.uid);
-    const docSnap = await getDoc(docRef);
+      const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || "drnitinmishraderma@gmail.com";
+      if (user.email === ADMIN_EMAIL) {
+        router.push("/admin");
+        return;
+      }
 
-    if (!docSnap.exists()) {
-      throw new Error("User profile not found in Firestore");
+      const docRef = doc(db, "users", user.uid);
+      const docSnap = await getDoc(docRef);
+
+      if (!docSnap.exists()) {
+        throw new Error("User profile not found in Firestore");
+      }
+
+      const userData = docSnap.data();
+      const role = userData.role;
+
+      if (role === "receptionist") {
+        router.push("/reception");
+      } else {
+        router.push("/");
+      }
+    } catch (error: any) {
+      setError(error.message || "Login failed.");
+    } finally {
+      setLoading(false);
     }
-
-    const userData = docSnap.data();
-    const role = userData.role;
-
-    // ✅ Redirect based on role
-    if (role === "admin") {
-      router.push("/admin/dashboard");
-    } else if (role === "receptionist") {
-      router.push("/reception");
-    } else {
-      router.push("/"); // patient
-    }
-
-  } catch (error: any) {
-    setError(error.message || "Login failed.");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-slate-50 to-teal-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-700">
@@ -117,7 +110,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                 onChange={(e) => setTheme(e.target.value)}
                 className="bg-white border rounded px-2 py-1 dark:bg-slate-700 dark:text-white"
               >
-                <option value="system">System</option>
+
                 <option value="dark">Dark</option>
                 <option value="light">Light</option>
               </select>
@@ -253,5 +246,5 @@ const handleSubmit = async (e: React.FormEvent) => {
         </div>
       </div>
     </div>
-  )
+  );
 }
