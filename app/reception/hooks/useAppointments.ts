@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, addDoc } from "firebase/firestore"
-import { db } from "../lib/firebase"
+import { db } from "@/lib/firebase"
 import type { Appointment } from "../lib/types"
 
 export function useAppointments() {

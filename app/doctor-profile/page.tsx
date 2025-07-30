@@ -29,7 +29,7 @@ export default function DoctorProfile() {
     experience: "20+ years",
     rating: 4.9,
     reviews: 500,
-    image: "/placeholder.svg?height=256&width=256",
+    image: "/doctor.jpg", // Updated with actual image path
     about:
       "Dr. Nitin Mishra is a highly experienced dermatologist with over 20 years of specialized practice in Dermatology, Venereology & Leprosy. He holds an MBBS degree and MD in Skin & VD, making him one of the most qualified skin specialists in Bareilly. Dr. Mishra has successfully treated thousands of patients with various skin conditions and is known for his expertise in advanced laser treatments, surgical procedures, and comprehensive skin care.",
     education: [
@@ -119,6 +119,9 @@ export default function DoctorProfile() {
                       src={doctor.image || "/placeholder.svg?height=256&width=256"}
                       alt={doctor.name}
                       className="w-64 h-64 rounded-2xl object-cover mx-auto md:mx-0 shadow-lg"
+                      onError={(e) => {
+                        e.currentTarget.src = "/placeholder.svg?height=256&width=256"; // Fallback image
+                      }}
                     />
                     <div className="absolute -bottom-4 -right-4 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium">
                       Available Today

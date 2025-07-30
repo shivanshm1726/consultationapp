@@ -10,15 +10,15 @@ export default function GalleryPage() {
   const [visibleImages, setVisibleImages] = useState<number[]>([])
 
   const galleryImages = [
-    { id: 1, title: "Clinic Reception", category: "Interior" },
-    { id: 2, title: "Treatment Room", category: "Interior" },
-    { id: 3, title: "Laser Equipment", category: "Equipment" },
-    { id: 4, title: "Consultation Room", category: "Interior" },
-    { id: 5, title: "Waiting Area", category: "Interior" },
-    { id: 6, title: "Advanced Machinery", category: "Equipment" },
-    { id: 7, title: "Sterilization Unit", category: "Equipment" },
-    { id: 8, title: "Patient Care Area", category: "Interior" },
-    { id: 9, title: "Medical Instruments", category: "Equipment" },
+    { id: 1, title: "Clinic Exterior", category: "Exterior", image: "/clinic2.png" },
+    { id: 2, title: "Clinic Reception", category: "Interior", image: "/clinic5.png" },
+    { id: 3, title: "Laser Equipment", category: "Equipment", image: "/clinic3.png" },
+    { id: 4, title: "Advanced Machinery", category: "Equipment", image: "/clinic1.png" },
+    { id: 5, title: "Consultation Area", category: "Interior", image: "/clinic4.png" },
+    { id: 6, title: "Doctor Cabin", category: "Interior", image: "/doctorcabin.png" },
+    { id: 7, title: "Waiting Area", category: "Interior", image: "/waitingarea.png" },
+    { id: 8, title: "Laser Treatment", category: "Equipment", image: "/laser.png" },
+    { id: 9, title: "Pharmacy", category: "Interior", image: "/pharmacy.png" },
   ]
 
   useEffect(() => {
@@ -114,9 +114,12 @@ export default function GalleryPage() {
               >
                 <div className="relative overflow-hidden">
                   <img
-                    src={`/placeholder.svg?height=300&width=400`}
+                    src={image.image}
                     alt={image.title}
                     className="w-full h-64 object-cover group-hover:scale-110 transition-transform duration-500"
+                    onError={(e) => {
+                      e.currentTarget.src = "/placeholder.svg?height=300&width=400" // Fallback image
+                    }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                   <div className="absolute bottom-4 left-4 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-4 group-hover:translate-y-0">

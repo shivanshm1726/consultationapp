@@ -1,5 +1,5 @@
 "use client"
-
+import { useRouter } from "next/navigation";
 import { useState, useRef } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -26,22 +26,26 @@ import { useAuth } from "@/contexts/auth-context"
 import { logoutUser } from "@/lib/auth"
 
 export default function HomePage() {
+  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [darkMode, setDarkMode] = useState(false)
-  const [showServices, setShowServices] = useState(false)
+  const [showServices, setShowServices] = useState(true)
   const [showGallery, setShowGallery] = useState(false)
   const [serviceScrollPosition, setServiceScrollPosition] = useState(0)
   const servicesRef = useRef<HTMLDivElement>(null)
+
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const { user, userData } = useAuth()
 
   const handleLogout = async () => {
     try {
-      await logoutUser()
+      await logoutUser();
+      router.push("/login"); // Redirect to login page after logout
     } catch (error) {
-      console.error("Logout error:", error)
+      console.error("Logout error:", error);
     }
-  }
+  };
 
   const scrollServices = (direction: "left" | "right") => {
     const maxScroll = Math.max(0, services.length - 3)
@@ -52,43 +56,60 @@ export default function HomePage() {
     }
   }
 
-  const services = [
-    {
-      title: "Laser Hair Removal",
-      description:
-        "In Our Clinic, We use the latest laser machine which uses state-of the-art to remove unwanted hair and with greater speed and comfort than other methods. Dr. Nitin Mishra is the best Skin Specialist in Bareilly.",
-      icon: "✨",
-    },
-    {
-      title: "Chemical Peeling",
-      description:
-        "Chemical peels is best method for skin tightning and skin whitening. Chemical peels uses a chemical solution to improve and smooth the texture of the facial skin by removing its damaged outer layer.",
-      icon: "🧴",
-    },
-    {
-      title: "Vitiligo Surgery",
-      description:
-        "Vitiligo is a chronic skin disorder that causes areas of skin to lose colour. It presents as depigmented (white) patches. The goal of vitiligo surgery is to achieve Cultured and Non Cultured Melanocyte Transfer, Blister Grafting, Punch Grafting, Split Thikness etc.",
-      icon: "🏥",
-    },
-    {
-      title: "Electro Surgery",
-      description:
-        "Electro surgery refers to the cutting and coagulation of tissue using high-frequency electrical current. In addition, they should understand the mechanism of action and how to troubleshoot equipment. Visit us at our clinic Infront of Vikash Bhavan, Rampur Garden, Bareilly-243001 (U.P).",
-      icon: "⚡",
-    },
-    {
-      title: "Radio Frequency Surgery",
-      description:
-        "At Our Clinic, all these problems can be cured in one sitting with the help of latest and innovative RADIO FREQUENCY MACHINE. This machine removes the unwanted mole, skin tags, sun spots, warts without any scarring and with no or very minimal bleeding. Dr. Nitin Mishra is the best Skin Specialist.",
-      icon: "📡",
-    },
-    {
-      title: "Acne Surgery",
-      description:
-        "Acne or pimples is a common teenage problem. Medically acne problem is categorized into active acne (comedons, white heads, black heads), acne pigment (red, brown and black) and acne scars (atrophic, hypertrophic and ice-pick). Dr. Nitin Mishra is the best Skin Specialist in Bareilly.",
-      icon: "🎯",
-    },
+  // Update the services array with image URLs
+const services = [
+  {
+    title: "Laser Hair Removal",
+    description:
+      "In Our Clinic, We use the latest laser machine which uses state-of-the-art to remove unwanted hair and with greater speed and comfort than other methods. Each laser pulse can treat multiple hairs in a fraction of a second, making treatments quick.",
+    icon: "✨",
+    image: "/laserhairremoval.jpg", // Replace with your image path or URL
+  },
+  {
+    title: "Chemical Peeling",
+    description:
+      "Chemical peels is best method for skin tightening and skin whitening. Chemical peels uses a chemical solution to improve and smooth the texture of the facial skin by removing its damaged outer layer, recovery varies by peel depth.",
+    icon: "🧴",
+    image: "/chemicalpeeling.jpg", // Replace with your image path or URL
+  },
+  {
+    title: "Vitiligo Surgery",
+    description:
+      "Vitiligo is a chronic skin disorder that causes areas of skin to lose colour. It presents as depigmented (white) patches. The goal of vitiligo surgery is to achieve Cultured and Non Cultured Melanocyte Transfer, Blister Grafting, Punch Grafting, Split Thickness etc.",
+    icon: "🏥",
+    image: "/vitiligo.jpg", // Replace with your image path or URL
+  },
+  {
+    title: "Electro Surgery",
+    description:
+      "Electro surgery refers to the cutting and coagulation of tissue using high-frequency electrical current. In addition, they should understand the mechanism of action, recovery time varies depending on the size and depth of the treated area",
+    icon: "⚡",
+    image: "/electrosurgery.jpeg", // Replace with your image path or URL
+  },
+  {
+    title: "Radio Frequency Surgery",
+    description:
+      "At Our Clinic, all these problems can be cured in one sitting with the help of latest and innovative RADIO FREQUENCY MACHINE. This machine removes the unwanted mole, skin tags, sun spots, warts without any scarring and with no or very minimal bleeding.",
+    icon: "📡",
+    image: "/radiofrequency.jpeg", // Replace with your image path or URL
+  },
+  {
+    title: "Acne Surgery",
+    description:
+      "Acne or pimples is a common teenage problem. Medically acne problem is categorized into active acne (comedons, white heads, black heads), acne pigment (red, brown and black) and acne scars (atrophic, hypertrophic and ice-pick).",
+    icon: "🎯",
+    image: "/acnesurgery.jpeg", // Replace with your image path or URL
+  },
+];
+
+  // Sample gallery images (replace with your own URLs or local paths)
+  const galleryImages = [
+    "/clinic2.png",
+    "/clinic5.png",
+    "/clinic8.png",
+    "/clinic4.png",
+    "/clinic1.png",
+    "/clinic3.png",
   ]
 
   return (
@@ -136,12 +157,17 @@ export default function HomePage() {
               >
                 Contact
               </Link>
+              <Link
+                href="/why-choose-us"
+                className={`${darkMode ? "text-gray-300 hover:text-white" : "text-gray-600 hover:text-indigo-600"} transition-colors`}
+              >
+                Why Choose Us
+              </Link>
             </nav>
 
             <div className="flex items-center space-x-4">
               <Button variant="ghost" size="sm" onClick={() => setDarkMode(!darkMode)} className="p-2">
                 {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                <span className="ml-2 hidden md:inline">{darkMode ? "Light Mode" : "Dark Mode"}</span>
               </Button>
 
               {user ? (
@@ -199,7 +225,7 @@ export default function HomePage() {
                   About Doctor
                 </Link>
                 <Link href="/treatments" className={`${darkMode ? "text-gray-300" : "text-gray-600"}`}>
-                  Interactive Gallery
+                  Gallery
                 </Link>
                 <Link href="/contact" className={`${darkMode ? "text-gray-300" : "text-gray-600"}`}>
                   Contact
@@ -232,7 +258,7 @@ export default function HomePage() {
       </header>
 
       {/* Hero Section */}
-      <section className="relative py-20 overflow-hidden">
+      <section className="relative py-20 pb-32 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/10 to-teal-600/10"></div>
         <div className="container mx-auto px-4 relative">
           <div className="grid lg:grid-cols-2 gap-12 items-center relative">
@@ -266,7 +292,7 @@ export default function HomePage() {
                     <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
-                <Link href="/chat">
+                <Link href="/patient/chat">
                   <Button
                     size="lg"
                     variant="outline"
@@ -279,6 +305,7 @@ export default function HomePage() {
                     Start Live Chat
                   </Button>
                 </Link>
+                
               </div>
 
               <div className="flex items-center space-x-8">
@@ -297,26 +324,32 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="relative z-10">
-              <div className="relative z-10">
-                <img
-                  src="/placeholder.svg?height=500&width=400"
-                  alt="Dr. Nitin Mishra"
-                  className="rounded-2xl shadow-2xl w-full max-w-md mx-auto"
-                />
-              </div>
-              <div className="absolute -bottom-6 -right-6 bg-white/90 backdrop-blur-sm p-6 rounded-xl shadow-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                    <Shield className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div>
-                    <div className={`font-semibold ${darkMode ? "text-gray-900" : "text-gray-900"}`}>
-                      Certified & Licensed
+            <div className="relative z-10 flex justify-center">
+              <div className="relative group">
+                {/* Beautiful border container */}
+                <div className="relative p-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-teal-500 rounded-3xl shadow-2xl group-hover:shadow-3xl transition-all duration-300">
+                  <div className="bg-white rounded-2xl p-1 shadow-inner">
+                    <img
+                      src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/doctor-award.jpg-lTIEbH4xBAMehhJONWbfhUwLiYMMRz.jpeg"
+                      alt="Dr. Nitin Mishra receiving professional recognition"
+                      className="rounded-xl w-full max-w-md mx-auto object-cover shadow-lg group-hover:scale-[1.02] transition-transform duration-300"
+                      style={{ aspectRatio: "4/3", height: "auto", minHeight: "350px" }}
+                    />
+                    {/* Text Box Below Image */}
+                    <div
+                      className={`text-center p-4 rounded-b-xl ${darkMode ? "bg-slate-800/95 text-white" : "bg-white/95 text-gray-900"} backdrop-blur-md border-t ${darkMode ? "border-slate-700" : "border-gray-200"}`}
+                    >
+                      <div className="font-bold text-lg mb-1">Certified & Licensed</div>
+                      <div className="text-indigo-600 font-semibold text-base">MD (Skin & VD)</div>
+                      <div className="text-sm mt-1">Board Certified Dermatologist</div>
                     </div>
-                    <div className="text-sm text-gray-600">MD (Skin & VD)</div>
                   </div>
                 </div>
+
+                {/* Decorative elements */}
+                <div className="absolute -top-4 -right-4 w-8 h-8 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full animate-pulse shadow-lg"></div>
+                <div className="absolute -bottom-4 -left-4 w-6 h-6 bg-gradient-to-r from-pink-400 to-red-500 rounded-full animate-pulse shadow-lg"></div>
+                <div className="absolute top-1/2 -left-8 w-4 h-4 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full animate-bounce shadow-lg"></div>
               </div>
             </div>
           </div>
@@ -385,87 +418,90 @@ export default function HomePage() {
 
       {/* Services */}
       <section className="py-20">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 mb-4">Why Choose Us</Badge>
-            <h2 className={`text-3xl md:text-4xl font-bold mb-4 ${darkMode ? "text-white" : "text-gray-900"}`}>
-              Reasons to Trust Dr. Nitin Mishra
-            </h2>
-            <p className={`text-xl max-w-2xl mx-auto mb-8 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-              Experience, expertise, and personalized care for your skin health
-            </p>
+  <div className="container mx-auto px-4">
+    <div className="text-center mb-16">
+      <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 mb-4">Why Choose Us</Badge>
+      <h2 className={`text-3xl md:text-4xl font-bold mb-4 ${darkMode ? "text-white" : "text-gray-900"}`}>
+        Reasons to Trust Dr. Nitin Mishra
+      </h2>
+      <p className={`text-xl max-w-2xl mx-auto mb-8 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+        Experience, expertise, and personalized care for your skin health
+      </p>
+      <Button
+        onClick={() => setShowServices(!showServices)}
+        className="bg-gradient-to-r from-indigo-600 to-teal-600 hover:from-indigo-700 hover:to-teal-700 shadow-lg"
+      >
+        {showServices ? "Hide Services" : "View Services"}
+      </Button>
+
+      {/* Interactive Service Cards */}
+      {showServices && (
+        <div className="mt-12 relative">
+          <div className="flex items-center justify-center space-x-4 mb-6">
             <Button
-              onClick={() => setShowServices(!showServices)}
-              className="bg-gradient-to-r from-indigo-600 to-teal-600 hover:from-indigo-700 hover:to-teal-700 shadow-lg"
+              variant="outline"
+              size="sm"
+              onClick={() => scrollServices("left")}
+              className="rounded-full p-2"
             >
-              {showServices ? "Hide Services" : "View Services"}
+              <ArrowLeft className="h-4 w-4" />
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => scrollServices("right")}
+              className="rounded-full p-2"
+            >
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
 
-            {/* Interactive Service Cards */}
-            {showServices && (
-              <div className="mt-12 relative">
-                <div className="flex items-center justify-center space-x-4 mb-6">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => scrollServices("left")}
-                    className="rounded-full p-2"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => scrollServices("right")}
-                    className="rounded-full p-2"
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                <div className="overflow-hidden">
-                  <div
-                    ref={servicesRef}
-                    className="flex space-x-6 transition-transform duration-500 ease-in-out"
-                    style={{ transform: `translateX(-${serviceScrollPosition * 320}px)` }}
-                  >
-                    {services.map((service, index) => (
-                      <div
-                        key={index}
-                        className={`min-w-[350px] group shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-300 border-0 rounded-xl p-6 ${
-                          darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
-                        }`}
-                      >
-                        <div className="text-center">
-                          <div className="text-4xl mb-4">{service.icon}</div>
-                          <img
-                            src={`/placeholder.svg?height=150&width=300`}
-                            alt={service.title}
-                            className="w-full h-32 object-cover rounded-lg mb-4"
-                          />
-                          <h3 className={`text-xl font-semibold mb-3 ${darkMode ? "text-white" : "text-blue-900"}`}>
-                            {service.title}
-                          </h3>
-                          <p className={`mb-4 text-sm leading-relaxed ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-                            {service.description}
-                          </p>
-                          <Link href="/appointment">
-                            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white transition-all">
-                              Book Now
-                            </Button>
-                          </Link>
-                        </div>
-                      </div>
-                    ))}
+          <div className="overflow-hidden">
+            <div
+              ref={servicesRef}
+              className="flex space-x-6 transition-transform duration-500 ease-in-out"
+              style={{ transform: `translateX(-${serviceScrollPosition * 320}px)` }}
+            >
+              {services.map((service, index) => (
+                <div
+                  key={index}
+                  className={`min-w-[350px] group shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-300 border-0 rounded-xl p-6 ${
+                    darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
+                  }`}
+                >
+                  <div className="text-center">
+                    <div className="text-4xl mb-4">{service.icon}</div>
+                    <img
+                      src={service.image}
+                      alt={service.title}
+                      className="w-full h-32 object-cover rounded-lg mb-4"
+                      onError={(e) => {
+                        e.currentTarget.src = "/placeholder.svg?height=150&width=300"; // Fallback image
+                      }}
+                    />
+                    <h3 className={`text-xl font-semibold mb-3 ${darkMode ? "text-white" : "text-blue-900"}`}>
+                      {service.title}
+                    </h3>
+                    <p className={`mb-4 text-sm leading-relaxed ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+                      {service.description}
+                    </p>
+                    <Link href="/appointment">
+                      <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white transition-all">
+                        Book Now
+                      </Button>
+                    </Link>
                   </div>
                 </div>
-              </div>
-            )}
-
-            <p className="text-center font-semibold text-lg mt-8">Consultation Fee: ₹500</p>
+              ))}
+            </div>
           </div>
         </div>
-      </section>
+      )}
+
+      <p className="text-center font-semibold text-lg mt-8">Consultation Fee: ₹500</p>
+    </div>
+  </div>
+</section>
 
       {/* Interactive Gallery Preview */}
       <section className="py-20">
@@ -480,7 +516,7 @@ export default function HomePage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-6 mb-8">
-            {[1, 2, 3].map((index) => (
+            {galleryImages.slice(0, 3).map((image, index) => (
               <Card
                 key={index}
                 className={`group cursor-pointer hover:shadow-xl transition-all duration-300 border-0 overflow-hidden ${
@@ -490,8 +526,8 @@ export default function HomePage() {
               >
                 <div className="relative">
                   <img
-                    src={`/placeholder.svg?height=200&width=300`}
-                    alt={`Clinic Image ${index}`}
+                    src={image}
+                    alt={`Clinic Image ${index + 1}`}
                     className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                   <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors duration-300"></div>
@@ -613,7 +649,7 @@ export default function HomePage() {
                 Book Appointment
               </Button>
             </Link>
-            <Link href="/chat">
+            <Link href="/patient/chat">
               <Button
                 size="lg"
                 variant="outline"
@@ -713,7 +749,7 @@ export default function HomePage() {
           </div>
 
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 Dr. Nitin Mishra - Skin Specialist. All rights reserved.</p>
+            <p>&copy; 2025 Dr. Nitin Mishra - Skin Specialist. All rights reserved.</p>
           </div>
         </div>
       </footer>
@@ -721,7 +757,7 @@ export default function HomePage() {
       {/* Mobile Bottom CTA */}
       <div className="fixed bottom-0 left-0 right-0 md:hidden bg-white/90 backdrop-blur-md border-t border-gray-200 p-4 z-50">
         <div className="flex space-x-3">
-          <Link href="/chat" className="flex-1">
+          <Link href="/patient/chat" className="flex-1">
             <Button variant="outline" className="w-full bg-transparent">
               Chat Now
             </Button>
@@ -731,6 +767,7 @@ export default function HomePage() {
           </Link>
         </div>
       </div>
+
       {/* Gallery Modal */}
       {showGallery && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
@@ -742,11 +779,11 @@ export default function HomePage() {
               </Button>
             </div>
             <div className="p-4 grid md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[70vh] overflow-y-auto">
-              {[1, 2, 3, 4, 5, 6].map((index) => (
+              {galleryImages.map((image, index) => (
                 <img
                   key={index}
-                  src={`/placeholder.svg?height=200&width=300`}
-                  alt={`Clinic Image ${index}`}
+                  src={image}
+                  alt={`Clinic Image ${index + 1}`}
                   className="w-full h-48 object-cover rounded-lg"
                 />
               ))}

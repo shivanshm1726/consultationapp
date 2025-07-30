@@ -1,8 +1,10 @@
 "use client"
-
+import { db } from "@/lib/firebase"  
+import { collection, addDoc, serverTimestamp } from "firebase/firestore"  
 import type React from "react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { getDocs, query, where } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -10,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar } from "@/components/ui/calendar"
+import { useAppointmentStatus } from "app/reception/hooks/useAppointmentStatus"
 import {
   ArrowLeft,
   CalendarIcon,
@@ -24,6 +27,7 @@ import {
 } from "lucide-react"
 
 export default function AppointmentBooking() {
+  const { active, loading: statusLoading } = useAppointmentStatus()
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
   const [selectedTime, setSelectedTime] = useState("")
   const [selectedClinic, setSelectedClinic] = useState("")
@@ -41,7 +45,7 @@ export default function AppointmentBooking() {
   const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([])
   const [isWaitingList, setIsWaitingList] = useState(false)
   const [showConfirmation, setShowConfirmation] = useState(false)
-
+  
   const clinics = [
     {
       id: "rampur",
@@ -70,34 +74,88 @@ export default function AppointmentBooking() {
     },
   ]
 
-  useEffect(() => {
-    if (selectedClinic && selectedDate) {
-      const clinic = clinics.find((c) => c.id === selectedClinic)
-      if (clinic) {
-        // Simulate some slots being unavailable
-        const unavailableSlots = ["11:00 AM", "7:00 PM", "3:00 PM", "9:00 PM"]
-        const availableSlots = clinic.timings.filter((slot) => !unavailableSlots.includes(slot))
-        setAvailableTimeSlots(availableSlots)
+  const selectedClinicInfo = clinics.find((c) => c.id === selectedClinic)
+const [fullyBookedSlots, setFullyBookedSlots] = useState<string[]>([])
+
+useEffect(() => {
+  const fetchAppointments = async () => {
+    if (!selectedClinic || !selectedDate) return
+
+    const appointmentsRef = collection(db, "appointments")
+    const formattedDate = selectedDate.toISOString().split("T")[0] // convert Date → "YYYY-MM-DD"
+
+    const q = query(
+      appointmentsRef,
+      where("clinicId", "==", selectedClinic),
+      where("date", "==", formattedDate)
+    )
+
+    const snapshot = await getDocs(q)
+    const timeSlotCount: Record<string, number> = {}
+
+    snapshot.forEach((doc) => {
+      const time = doc.data().time
+      if (typeof time === "string") {
+        timeSlotCount[time] = (timeSlotCount[time] || 0) + 1
       }
+    })
+
+    const fullSlots = Object.entries(timeSlotCount)
+      .filter(([_, count]) => count >= 15)
+      .map(([slot]) => slot)
+
+    setFullyBookedSlots(fullSlots)
+
+    const clinic = clinics.find((c) => c.id === selectedClinic)
+    if (clinic) {
+      setAvailableTimeSlots(clinic.timings)
     }
-  }, [selectedClinic, selectedDate])
+  }
+
+  fetchAppointments()
+}, [selectedClinic, selectedDate])
+
+
+
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault()
 
-    if (!selectedClinic || !selectedDate || !selectedTime) {
-      alert("Please fill in all the required fields.")
-      return
-    }
-
-    setShowConfirmation(true)
+  if (!selectedClinic || !selectedDate || (!selectedTime && !isWaitingList)) {
+    alert("Please fill in all the required fields.")
+    return
   }
 
-  const selectedClinicInfo = clinics.find((c) => c.id === selectedClinic)
+  try {
+   await addDoc(collection(db, "appointments"), {
+  firstName: formData.firstName,
+  lastName: formData.lastName,
+  phone: formData.phone,
+  email: formData.email,
+  clinic: selectedClinicInfo?.name,
+  clinicId: selectedClinicInfo?.id,
+  date: selectedDate?.toISOString().split("T")[0],
+  time: selectedTime,
+  urgency: formData.urgency,
+  paymentStatus: "paid",
+  createdAt: serverTimestamp(),
+  symptoms: formData.symptoms
+})
+  
+
+    setShowConfirmation(true)  // 👈 show the UI popup
+  } catch (err) {
+    alert("Error booking appointment. Please try again.")
+    console.error("Firebase error:", err)
+  }
+}
+
+
+  
 
   if (showConfirmation) {
     return (
@@ -281,24 +339,7 @@ export default function AppointmentBooking() {
                     </div>
                   </div>
 
-                  <div>
-                    <Label htmlFor="preferredContact" className="text-blue-900 dark:text-slate-200">
-                      Preferred Contact Method
-                    </Label>
-                    <Select
-                      value={formData.preferredContact}
-                      onValueChange={(value) => handleInputChange("preferredContact", value)}
-                    >
-                      <SelectTrigger className="bg-white/50 dark:bg-slate-700 dark:text-slate-50">
-                        <SelectValue placeholder="How would you like us to contact you?" />
-                      </SelectTrigger>
-                      <SelectContent className="dark:bg-slate-800 dark:text-slate-50">
-                        <SelectItem value="phone">Phone Call</SelectItem>
-                        <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                        <SelectItem value="email">Email</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  
                 </CardContent>
               </Card>
 
@@ -377,53 +418,67 @@ export default function AppointmentBooking() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {!selectedClinic ? (
-                    <p className="text-gray-500 dark:text-gray-400 text-center py-4">Please select a clinic first</p>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      {availableTimeSlots.length > 0 ? (
-                        availableTimeSlots.map((slot, index) => (
-                          <Button
-                            key={index}
-                            type="button"
-                            variant={selectedTime === slot ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => {
-                              setSelectedTime(slot)
-                              setIsWaitingList(false)
-                            }}
-                            className={`text-sm ${
-                              selectedTime === slot
-                                ? "bg-blue-600 hover:bg-blue-700 text-white"
-                                : "bg-white/50 hover:bg-white/80 dark:bg-slate-700/50 dark:hover:bg-slate-700 dark:text-slate-300"
-                            }`}
-                          >
-                            {slot}
-                          </Button>
-                        ))
-                      ) : (
-                        <>
-                          <p className="text-gray-500 dark:text-gray-400 text-center py-4 col-span-2">
-                            No available time slots for the selected date.
-                          </p>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            className="w-full col-span-2"
-                            onClick={() => {
-                              setIsWaitingList(true)
-                              setSelectedTime("")
-                            }}
-                          >
-                            <ListChecks className="h-4 w-4 mr-2" />
-                            Join Waiting List
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
+  {!selectedClinic ? (
+    <p className="text-gray-500 dark:text-gray-400 text-center py-4">
+      Please select a clinic first
+    </p>
+  ) : (
+    <div className="grid grid-cols-2 gap-2">
+      {availableTimeSlots.length > 0 ? (
+        availableTimeSlots.map((slot, index) => {
+  const isFull = fullyBookedSlots.includes(slot)
+  const isSelected = selectedTime === slot
+
+  return (
+    <Button
+      key={index}
+      type="button"
+      variant={isSelected ? "default" : "outline"}
+      size="sm"
+      onClick={() => {
+        if (!isFull) {
+          setSelectedTime(slot)
+          setIsWaitingList(false)
+        }
+      }}
+      disabled={isFull}
+      className={`text-sm w-full ${
+        isSelected
+          ? "bg-blue-600 hover:bg-blue-700 text-white"
+          : isFull
+          ? "bg-gray-200 text-gray-500 dark:bg-slate-600/60 dark:text-gray-400 cursor-not-allowed"
+          : "bg-white/50 hover:bg-white/80 dark:bg-slate-700/50 dark:hover:bg-slate-700 dark:text-slate-300"
+      }`}
+    >
+      {slot}
+    </Button>
+  )
+})
+
+      ) : (
+        <>
+          <p className="text-gray-500 dark:text-gray-400 text-center py-4 col-span-2">
+            No available time slots for the selected date.
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="w-full col-span-2"
+            onClick={() => {
+              setIsWaitingList(true)
+              setSelectedTime("")
+            }}
+          >
+            <ListChecks className="h-4 w-4 mr-2" />
+            Join Waiting List
+          </Button>
+        </>
+      )}
+    </div>
+  )}
+</CardContent>
+
               </Card>
 
               {/* Booking Summary */}
@@ -514,6 +569,39 @@ export default function AppointmentBooking() {
               </Card>
             </div>
           </form>
+          {/* Step 6: Loading Popup */}
+{statusLoading && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <Card className="p-6 bg-white dark:bg-slate-800 shadow-lg">
+      <CardContent className="flex flex-col items-center">
+        <div className="loader mb-4 animate-spin h-6 w-6 border-4 border-blue-500 border-t-transparent rounded-full" />
+        <p className="text-gray-700 dark:text-gray-300">Checking appointment availability...</p>
+      </CardContent>
+    </Card>
+  </div>
+)}
+
+{/* Step 5: Closed Popup */}
+{!statusLoading && !active && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <Card className="max-w-sm p-6 bg-white dark:bg-slate-800 shadow-lg">
+      <CardHeader>
+        <CardTitle className="text-xl text-red-600 dark:text-red-400">Appointments Closed</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-gray-700 dark:text-gray-300 mb-4">
+          Sorry! Appointments are not being accepted right now.
+          <br />
+          Please check again after 10 AM tomorrow.
+        </p>
+        <Button onClick={() => window.location.href = '/'} className="bg-blue-600 text-white hover:bg-blue-700">
+          Close
+        </Button>
+      </CardContent>
+    </Card>
+  </div>
+)}
+
         </div>
       </div>
     </div>

@@ -1,4 +1,6 @@
-import { initializeApp } from "firebase/app"
+// lib/firebase.ts (or whichever one you keep)
+
+import { initializeApp, getApps, getApp } from "firebase/app"
 import { getAuth } from "firebase/auth"
 import { getFirestore } from "firebase/firestore"
 import { getStorage } from "firebase/storage"
@@ -10,10 +12,13 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID, // optional
 }
 
-const app = initializeApp(firebaseConfig)
+// ✅ Avoid duplicate initialization
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
+
 export const auth = getAuth(app)
 export const db = getFirestore(app)
-export const storage = getStorage(app) // ✅ Keep this if you want Firebase Storage
+export const storage = getStorage(app)
 export default app

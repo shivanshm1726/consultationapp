@@ -1,7 +1,15 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import { auth, db, storage } from "@/lib/firebase"
+import { addDoc, collection, orderBy, query, serverTimestamp, onSnapshot, where, updateDoc, doc, getDocs, deleteDoc } from "firebase/firestore"
+import { useAuthState } from "react-firebase-hooks/auth"
+import { useRouter, useSearchParams } from "next/navigation"
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
+import { v4 as uuidv4 } from "uuid"
+import { toast } from "@/components/ui/use-toast"
+
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,7 +18,6 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
   Send,
@@ -25,35 +32,39 @@ import {
   Loader2,
 } from "lucide-react"
 import { useTheme } from "next-themes"
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, deleteDoc, getDocs } from "firebase/firestore"
-import { db, auth } from "@/lib/firebase"
-import { onAuthStateChanged } from "firebase/auth"
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense } from "react"
+import type { User as FirebaseUser } from "firebase/auth"
+
+// Define MessageType interface for better type safety
+type MessageType = {
+  id: string
+  text?: string
+  senderEmail: string
+  timestamp: any
+  mediaUrl?: string
+  mediaType?: "image" | "video" | "file"
+  fileName?: string
+  uid?: string
+  photoURL?: string | null
+}
 
 function LiveChatContent() {
+  const [user] = useAuthState(auth)
+  const [messages, setMessages] = useState<MessageType[]>([])
+  const [newMessage, setNewMessage] = useState("")
+  const [roomId, setRoomId] = useState<string | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [isSending, setIsSending] = useState(false)
   const [chatStarted, setChatStarted] = useState(false)
-  const [message, setMessage] = useState("")
-  const [messages, setMessages] = useState<any[]>([])
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [roomId, setRoomId] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const router = useRouter()
-  const doctorEmail = process.env.NEXT_PUBLIC_DOCTOR_EMAIL!;
-  // Get logged in user
-  const [user] = useAuthState(auth);
-  const searchParams = useSearchParams();
+  const searchParams = useSearchParams()
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { theme } = useTheme()
 
-  const doctorQuickReplies = [
-    "How can I help you?",
-    "Please elaborate your symptoms.",
-    "I'll prescribe you a medicine.",
-    "Thank you for your time.",
-    "Do you have any allergies?",
-  ]
+  const doctorEmail = process.env.NEXT_PUBLIC_DOCTOR_EMAIL!
+
   const patientQuickReplies = [
     "I have a skin issue.",
     "Since last week...",
@@ -61,8 +72,6 @@ function LiveChatContent() {
     "Yes, I have an allergy.",
     "What should I apply?",
   ]
-  const currentQuickReplies =
-    currentUser?.email === "drnitinmishraderma@gmail.com" ? doctorQuickReplies : patientQuickReplies
 
   const [preFormData, setPreFormData] = useState({
     name: "",
@@ -73,18 +82,12 @@ function LiveChatContent() {
     urgency: "",
   })
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const { theme } = useTheme()
-
-  // Validation function - ALL FIELDS MANDATORY
   const validateForm = () => {
     const errors: Record<string, string> = {}
 
     if (!preFormData.name.trim()) {
       errors.name = "Name is required"
     }
-
     if (!preFormData.age.trim()) {
       errors.age = "Age is required"
     } else {
@@ -93,21 +96,17 @@ function LiveChatContent() {
         errors.age = "Please enter a valid age between 5 and 100"
       }
     }
-
     if (!preFormData.gender) {
       errors.gender = "Gender is required"
     }
-
     if (!preFormData.contact.trim()) {
       errors.contact = "Contact number is required"
     } else if (!/^\d{10}$/.test(preFormData.contact.replace(/\D/g, ""))) {
       errors.contact = "Please enter a valid 10-digit contact number"
     }
-
     if (!preFormData.symptoms.trim()) {
       errors.symptoms = "Please describe your symptoms"
     }
-
     if (!preFormData.urgency) {
       errors.urgency = "Please select urgency level"
     }
@@ -116,7 +115,7 @@ function LiveChatContent() {
     return Object.keys(errors).length === 0
   }
 
-  const handlePreFormSubmit = (e: React.FormEvent) => {
+  const handlePreFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!validateForm()) {
@@ -126,204 +125,276 @@ function LiveChatContent() {
     setChatStarted(true)
     setMessages([
       {
-        id: 1,
-        sender: "system",
+        id: uuidv4(),
+        senderEmail: "system",
         text: `Hello ${preFormData.name}! Please wait until Dr. Nitin Mishra joins the chat.`,
         timestamp: new Date(),
       },
     ])
+
+    if (user?.email && roomId) {
+      try {
+        const activeChatsRef = collection(db, "activeChats")
+        const q = query(activeChatsRef, where("patientEmail", "==", user.email), where("status", "==", "active"))
+        const snapshot = await getDocs(q)
+
+        const chatData = {
+          patientEmail: user.email,
+          roomId,
+          patientName: preFormData.name,
+          age: preFormData.age,
+          gender: preFormData.gender,
+          contact: preFormData.contact,
+          symptoms: preFormData.symptoms,
+          urgency: preFormData.urgency,
+          timestamp: serverTimestamp(),
+          status: "active",
+        }
+
+        if (!snapshot.empty) {
+          const existingDoc = snapshot.docs[0]
+          await updateDoc(existingDoc.ref, chatData)
+          console.log("Updated activeChats document:", chatData)
+        } else {
+          const docRef = await addDoc(activeChatsRef, chatData)
+          console.log("Created new activeChats document with ID:", docRef.id, chatData)
+        }
+      } catch (error: any) {
+        console.error("Error managing active chat (activeChats):", error)
+        if (error && error.code) {
+          alert(`Firestore error: ${error.code} - ${error.message}`)
+        }
+        toast({
+          title: "Error",
+          description: "Failed to start chat. Please try again.",
+          variant: "destructive",
+        })
+      }
+    }
   }
 
   const handleInputChange = (field: string, value: string) => {
     setPreFormData((prev) => ({ ...prev, [field]: value }))
-    // Clear error when user starts typing
     if (formErrors[field]) {
       setFormErrors((prev) => ({ ...prev, [field]: "" }))
     }
   }
 
-
-  const handleFileChange = async (
-  e: React.ChangeEvent<HTMLInputElement>,user: any, searchParams: ReturnType<typeof useSearchParams>
-) => {
-  const files = e.target.files;
-  if (!files || files.length === 0) return;
-
-  const senderEmail = user.email!;
-  const otherUserEmail = searchParams.get("user"); // This comes from ?user=xyz@example.com in URL
-
-  const currentPatientEmail =
-    senderEmail === doctorEmail ? otherUserEmail : senderEmail;
-
-  if (!currentPatientEmail) {
-    alert("Patient email missing in URL or auth state.");
-    return;
+  const removeFromActiveChats = async () => {
+    if (user?.email) {
+      try {
+        const activeChatsRef = collection(db, "activeChats")
+        const q = query(activeChatsRef, where("patientEmail", "==", user.email), where("status", "==", "active"))
+        const snapshot = await getDocs(q)
+        const deletePromises = snapshot.docs.map((doc) => deleteDoc(doc.ref))
+        await Promise.all(deletePromises)
+      } catch (error) {
+        console.error("Error removing from active chats:", error)
+      }
+    }
   }
 
-  const receiverEmail =
-    senderEmail === doctorEmail ? currentPatientEmail : doctorEmail;
+  useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(async (loggedInUser: FirebaseUser | null) => {
+      if (loggedInUser) {
+        setPreFormData((prev) => ({
+          ...prev,
+          name: loggedInUser.displayName || loggedInUser.email?.split("@")[0] || "",
+        }))
 
-  const chatId = `${senderEmail}_to_${receiverEmail}`;
+        const sortedEmails = [loggedInUser.email!, doctorEmail].sort()
+        const currentRoomId = `${sortedEmails[0]}_${sortedEmails[1]}`
+        setRoomId(currentRoomId)
 
-  const storage = getStorage();
+        const messagesRef = collection(db, "chats", currentRoomId, "messages")
+        const q = query(messagesRef, orderBy("timestamp"))
 
-  for (const file of files) {
-    const storageRef = ref(
-      storage,
-      `chatMedia/${chatId}/${Date.now()}-${file.name}`
-    );
+        const unsubMessages = onSnapshot(
+          q,
+          (snapshot) => {
+            const newMessages: MessageType[] = snapshot.docs.map((doc) => {
+              const data = doc.data()
+              return {
+                id: doc.id,
+                senderEmail: data.senderEmail || data.email || "unknown",
+                text: data.text,
+                timestamp: data.timestamp?.toDate(),
+                mediaUrl: data.mediaUrl,
+                mediaType: data.mediaType,
+                fileName: data.fileName,
+                uid: data.uid,
+                photoURL: data.photoURL,
+              } as MessageType
+            })
+            setMessages(newMessages)
+          },
+          (error) => {
+            console.error("Error listening to messages: ", error)
+            toast({
+              title: "Error",
+              description: "Failed to load messages. Please try again.",
+              variant: "destructive",
+            })
+          },
+        )
 
-    await uploadBytes(storageRef, file);
-    const fileURL = await getDownloadURL(storageRef);
+        return () => unsubMessages()
+      } else {
+        await removeFromActiveChats()
+        router.push("/")
+      }
+    })
 
-    const mediaType = file.type.startsWith("image/")
-      ? "image"
-      : file.type.startsWith("video/")
-      ? "video"
-      : "file";
+    const handleBeforeUnload = async () => {
+      await removeFromActiveChats()
+    }
 
-    await addDoc(collection(db, "chats", chatId, "messages"), {
-      sender: senderEmail,
-      timestamp: serverTimestamp(),
-      mediaUrl: fileURL,
-      mediaType,
-      fileName: file.name,
-    });
-  }
+    const handleVisibilityChange = async () => {
+      if (document.hidden) {
+        await removeFromActiveChats()
+      }
+    }
 
-  // Clear the file input after uploading
-  e.target.value = "";
-};
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
 
+    return () => {
+      unsubscribeAuth()
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      removeFromActiveChats()
+    }
+  }, [user, router, doctorEmail])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!message.trim() || !roomId || !currentUser?.email) return
+    if ((!newMessage.trim() && !selectedFile) || !user?.email || !roomId || isSending) return
 
-    setIsLoading(true)
-    const newMessage = {
-      text: message,
-      sender: currentUser.email,
-      timestamp: serverTimestamp(),
-    }
-
+    setIsSending(true)
     try {
-      await addDoc(collection(db, "chats", roomId, "messages"), newMessage)
-      setMessage("")
-    } catch (err) {
-      console.error("Error sending message: ", err)
+      let messageData: Partial<MessageType> = {
+        senderEmail: user.email,
+        timestamp: serverTimestamp(),
+        uid: user.uid,
+        photoURL: user.photoURL,
+      }
+
+      if (selectedFile) {
+        const fileId = uuidv4()
+        const storageRef = ref(storage, `chatMedia/${roomId}/${fileId}_${selectedFile.name}`)
+        await uploadBytes(storageRef, selectedFile)
+        const fileURL = await getDownloadURL(storageRef)
+
+        const mediaType = selectedFile.type.startsWith("image/")
+          ? "image"
+          : selectedFile.type.startsWith("video/")
+            ? "video"
+            : "file"
+
+        messageData = {
+          ...messageData,
+          mediaUrl: fileURL,
+          mediaType: mediaType,
+          fileName: selectedFile.name,
+          text: newMessage.trim() || undefined,
+        }
+      } else {
+        messageData.text = newMessage.trim()
+      }
+
+      await addDoc(collection(db, "chats", roomId, "messages"), messageData)
+      setNewMessage("")
+      setSelectedFile(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    } catch (error) {
+      console.error("Error sending message:", error)
+      toast({
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive",
+      })
     } finally {
-      setIsLoading(false)
+      setIsSending(false)
     }
   }
 
-  const handleCall = async (type: "audio" | "video") => {
-    if (!roomId || !currentUser?.email) return
-
-    try {
-      const response = await fetch(
-        `https://us-central1-doctor-app-98244.cloudfunctions.net/api/generate-agora-token?channelName=${roomId}&uid=${currentUser.email}&role=publisher`,
-      )
-
-      const { token } = await response.json()
-
-      router.push(`/call?channel=${roomId}&uid=${currentUser.email}&token=${token}&type=${type}`)
-    } catch (err) {
-      console.error("Failed to fetch Agora token", err)
-    }
+  const handleFileUploadClick = () => {
+    fileInputRef.current?.click()
   }
 
-  // END CONSULTATION - Clear chat and reload
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    setSelectedFile(file || null)
+  }
+
   const handleEndConsultation = async () => {
-    if (window.confirm("Are you sure you want to end this consultation?")) {
+    if (window.confirm("Are you sure you want to end this consultation? This will clear your chat history.")) {
       try {
-        // Clear all messages in the chat room
+        await removeFromActiveChats()
+        
         if (roomId) {
           const messagesRef = collection(db, "chats", roomId, "messages")
           const snapshot = await getDocs(messagesRef)
           const deletePromises = snapshot.docs.map((doc) => deleteDoc(doc.ref))
           await Promise.all(deletePromises)
         }
-
-        // Reset state and reload page
         setChatStarted(false)
         setMessages([])
-        setMessage("")
+        setNewMessage("")
+        setSelectedFile(null)
         setPreFormData({
-          name: currentUser?.displayName || currentUser?.email?.split("@")[0] || "",
+          name: user?.displayName || user?.email?.split("@")[0] || "",
           age: "",
           gender: "",
           symptoms: "",
           contact: "",
           urgency: "",
         })
-
-        // Reload the page to start fresh
-        window.location.reload()
+        router.push("/")
       } catch (err) {
         console.error("Error ending consultation: ", err)
+        toast({
+          title: "Error",
+          description: "Failed to end consultation. Please try again or contact support.",
+          variant: "destructive",
+        })
       }
     }
   }
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  const handleCall = async (type: "audio" | "video") => {
+    if (!roomId || !user?.email) return
+    const NEXT_PUBLIC_TOKEN_BASE_URL = process.env.NEXT_PUBLIC_TOKEN_BASE_URL
+    if (!NEXT_PUBLIC_TOKEN_BASE_URL) {
+      console.error("NEXT_PUBLIC_TOKEN_BASE_URL is not set.")
+      return
+    }
+
+    try {
+      const response = await fetch(
+        `${NEXT_PUBLIC_TOKEN_BASE_URL}?channelName=${roomId}&uid=${user.email}&role=publisher`,
+      )
+      const { token } = await response.json()
+      router.push(`/call?channel=${roomId}&uid=${user.email}&token=${token}&type=${type}`)
+    } catch (err) {
+      console.error("Failed to fetch Agora token", err)
+      toast({
+        title: "Error",
+        description: "Failed to initiate call. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
-
-  const handleFileUpload = () => {
-    fileInputRef.current?.click()
-  }
-
-  // Auto-scroll to bottom when messages change
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages])
-
-  // Set up Firebase Auth and real-time message listening
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setCurrentUser(user)
-
-        // AUTO-FILL NAME from Firebase Auth
-        setPreFormData((prev) => ({
-          ...prev,
-          name: user.displayName || user.email?.split("@")[0] || "",
-        }))
-
-        const doctorEmail = "drnitinmishraderma@gmail.com"
-        const id = `${user.email}_to_${doctorEmail}`
-        setRoomId(id)
-
-        // REAL-TIME MESSAGE LISTENER - Auto-refreshing
-        const messagesRef = collection(db, "chats", id, "messages")
-        const q = query(messagesRef, orderBy("timestamp"))
-
-        const unsubMessages = onSnapshot(
-          q,
-          (snapshot) => {
-            const newMessages = snapshot.docs.map((doc) => ({
-              id: doc.id,
-              ...doc.data(),
-            }))
-            setMessages(newMessages)
-          },
-          (error) => {
-            console.error("Error listening to messages: ", error)
-          },
-        )
-
-        return () => unsubMessages()
-      }
-    })
-
-    return () => unsubscribe()
-  }, [])
 
   if (!chatStarted) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-        {/* Header */}
         <header className="bg-white/80 backdrop-blur-md shadow-sm border-b sticky top-0 z-50 dark:bg-gray-800/80 dark:border-gray-700">
           <div className="container mx-auto px-4 py-4">
             <div className="flex items-center justify-between">
@@ -488,7 +559,6 @@ function LiveChatContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      {/* Header */}
       <header className="bg-white/80 backdrop-blur-md shadow-sm border-b sticky top-0 z-50 dark:bg-gray-800/80 dark:border-gray-700">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center space-x-4">
@@ -509,10 +579,8 @@ function LiveChatContent() {
       </header>
 
       <div className="container mx-auto px-4 py-4 h-[calc(100vh-80px)] grid lg:grid-cols-4 gap-4">
-        {/* Chat Section */}
         <div className="lg:col-span-3 flex flex-col">
           <Card className="flex-1 flex flex-col bg-white/70 dark:bg-gray-800/70 shadow-xl border-0">
-            {/* Chat Header */}
             <CardHeader className="border-b bg-gradient-to-r from-blue-50 to-blue-50 dark:from-gray-700 dark:to-gray-700">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
@@ -547,7 +615,6 @@ function LiveChatContent() {
               </div>
             </CardHeader>
 
-            {/* Chat Messages */}
             <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.length === 0 && (
                 <div className="text-center py-8">
@@ -557,64 +624,64 @@ function LiveChatContent() {
               )}
 
               {messages.map((msg) => (
-  <div key={msg.id} className={`flex ${msg.sender === user?.email ? 'justify-end' : 'justify-start'} mb-2`}>
-    <div className="bg-blue-500 text-white p-2 rounded-lg max-w-[70%] break-words">
+                <div
+                  key={msg.id}
+                  className={`flex ${msg.senderEmail === user?.email ? "justify-end" : "justify-start"} mb-2`}
+                >
+                  <div
+                    className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg shadow-sm ${msg.senderEmail === user?.email
+                        ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white"
+                        : msg.senderEmail === "system"
+                          ? "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-700"
+                          : "bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border dark:border-gray-700"
+                      }`}
+                  >
+                    {msg.text && <p className="text-sm leading-relaxed">{msg.text}</p>}
 
-      {/* Text message */}
-      {msg.text && <p>{msg.text}</p>}
+                    {msg.mediaUrl && msg.mediaType === "image" && (
+                      <img
+                        src={msg.mediaUrl || "/placeholder.svg"}
+                        alt={msg.fileName || "Uploaded image"}
+                        className="mt-2 rounded-md max-w-full max-h-64 object-contain"
+                      />
+                    )}
+                    {msg.mediaUrl && msg.mediaType === "video" && (
+                      <video
+                        controls
+                        src={msg.mediaUrl}
+                        className="mt-2 rounded-md max-w-full max-h-64 object-contain"
+                      />
+                    )}
+                    {msg.mediaUrl && msg.mediaType === "file" && (
+                      <a
+                        href={msg.mediaUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 underline text-sm block text-white"
+                      >
+                        📎 {msg.fileName || "File"}
+                      </a>
+                    )}
 
-      {/* Image file */}
-      {msg.mediaType === "image" && (
-        <img
-          src={msg.mediaUrl}
-          alt={msg.fileName}
-          className="mt-2 rounded-md max-w-full max-h-64"
-        />
-      )}
-
-      {/* Video file */}
-      {msg.mediaType === "video" && (
-        <video
-          controls
-          src={msg.mediaUrl}
-          className="mt-2 rounded-md max-w-full max-h-64"
-        />
-      )}
-
-      {/* Other file types */}
-      {msg.mediaType === "file" && (
-        <a
-          href={msg.mediaUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-2 underline text-sm block text-white"
-        >
-          📎 {msg.fileName}
-        </a>
-      )}
-
-      <p className="text-[10px] text-white mt-1 text-right">
-        {msg.timestamp?.toDate?.().toLocaleTimeString()}
-      </p>
-    </div>
-  </div>
-))}
-
-              <div ref={messagesEndRef} />
+                    <p className="text-xs mt-1 opacity-70">
+                      {msg.timestamp?.toLocaleTimeString?.() ?? new Date().toLocaleTimeString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              <div ref={bottomRef} />
             </CardContent>
 
-            {/* Message Input */}
             <div className="border-t p-4 bg-white/50 dark:bg-gray-700/50">
-              {/* Quick Reply Buttons */}
-              {currentQuickReplies.length > 0 && (
+              {patientQuickReplies.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-3">
-                  {currentQuickReplies.map((reply, idx) => (
+                  {patientQuickReplies.map((reply, idx) => (
                     <Button
                       key={idx}
                       variant="secondary"
                       size="sm"
                       className="bg-slate-100 dark:bg-gray-700 dark:text-white text-gray-800 px-3 py-1 text-xs"
-                      onClick={() => setMessage(reply)}
+                      onClick={() => setNewMessage(reply)}
                     >
                       {reply}
                     </Button>
@@ -623,23 +690,23 @@ function LiveChatContent() {
               )}
 
               <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
-                <Button type="button" variant="outline" size="sm" onClick={handleFileUpload}>
+                <Button type="button" variant="outline" size="sm" onClick={handleFileUploadClick}>
                   <Paperclip className="h-4 w-4" />
                 </Button>
                 <Input
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Type your message..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder={selectedFile ? `File selected: ${selectedFile.name}` : "Type your message..."}
                   className="flex-1"
-                  disabled={isLoading}
+                  disabled={isSending}
                 />
                 <Button
                   type="submit"
                   size="sm"
                   className="bg-blue-600 hover:bg-blue-700 text-white"
-                  disabled={isLoading || !message.trim()}
+                  disabled={isSending || (!newMessage.trim() && !selectedFile)}
                 >
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </Button>
               </form>
               <input
@@ -647,14 +714,13 @@ function LiveChatContent() {
                 type="file"
                 className="hidden"
                 accept="image/*,video/*,.pdf,.doc,.docx"
-                multiple
-                onChange={(e)=>handleFileChange(e,user, searchParams)}
+                multiple={false}
+                onChange={handleFileChange}
               />
             </div>
           </Card>
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-4">
           <Card className="bg-white/70 dark:bg-gray-800/70 shadow-xl border-0">
             <CardHeader>
@@ -731,11 +797,13 @@ function LiveChatContent() {
 
 export default function LiveChat() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+        </div>
+      }
+    >
       <LiveChatContent />
     </Suspense>
   )

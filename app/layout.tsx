@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
 import RegisterSW from "@/components/RegisterSW";
@@ -7,9 +7,12 @@ export const metadata: Metadata = {
   title: "Dr. Nitin Mishra - Skin Specialist",
   description: "Expert dermatological care with 20+ years of experience",
   generator: "v0.dev",
-  themeColor: "#1976d2",
   manifest: "/manifest.json",
 };
+
+export const viewport: Viewport = {
+  themeColor: "#0f172a",
+}
 
 export default function RootLayout({
   children,

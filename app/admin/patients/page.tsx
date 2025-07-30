@@ -80,7 +80,7 @@ export default function PatientsPage() {
             gender: data.gender || "N/A",
             location: data.location || "N/A",
             totalConsultations: 0,
-            lastConsultation: data.createdAt?.toDate?.()?.toLocaleDateString() || "N/A",
+            lastConsultation: data.createdAt?.toDate?.()?.toISOString().slice(0, 10) || "N/A",
             medicalHistory: [],
             uploadedFiles: [],
             status: "active" as const,
@@ -96,7 +96,7 @@ export default function PatientsPage() {
         const currentDate = data.createdAt?.toDate?.()
         const lastDate = new Date(patient.lastConsultation)
         if (currentDate && currentDate > lastDate) {
-          patient.lastConsultation = currentDate.toLocaleDateString()
+          patient.lastConsultation = currentDate.toISOString().slice(0, 10)
         }
       })
 
@@ -275,7 +275,7 @@ export default function PatientsPage() {
           <div className="space-y-4">
             {filteredPatients.map((patient, index) => (
               <motion.div
-                key={patient.id}
+                key={patient.id ? patient.id : `patient-fallback-${index}`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1 }}
@@ -306,7 +306,7 @@ export default function PatientsPage() {
                       </span>
                       <span className="flex items-center">
                         <Calendar className="h-3 w-3 mr-1" />
-                        Last: {patient.lastConsultation}
+                        Last: {typeof patient.lastConsultation === "string" ? patient.lastConsultation : (patient.lastConsultation?.toISOString?.().slice(0, 10) || "N/A")}
                       </span>
                     </div>
                     <div className="flex items-center space-x-4 mt-1 text-xs text-gray-400">
@@ -369,13 +369,13 @@ export default function PatientsPage() {
                               Appointment History
                             </h4>
                             <div className="space-y-2 max-h-40 overflow-y-auto">
-                              {patientDetails.appointments.map((appointment, idx) => (
-                                <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                              {patientDetails.appointments.map((appointment) => (
+                                <div key={appointment.id} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                                   <div className="flex justify-between items-start">
                                     <div>
                                       <p className="font-medium">{appointment.symptoms}</p>
                                       <p className="text-sm text-gray-500">
-                                        {appointment.createdAt?.toDate?.()?.toLocaleDateString()} -{" "}
+                                        {appointment.createdAt?.toDate?.()?.toISOString().slice(0, 10)} -{" "}
                                         {appointment.urgency} urgency
                                       </p>
                                     </div>
@@ -396,11 +396,11 @@ export default function PatientsPage() {
                                 Uploaded Media
                               </h4>
                               <div className="grid grid-cols-3 gap-4">
-                                {patientDetails.uploadedMedia.map((url, idx) => (
-                                  <div key={idx} className="relative">
+                                {patientDetails.uploadedMedia.map((url) => (
+                                  <div key={url} className="relative">
                                     <img
                                       src={url || "/placeholder.svg"}
-                                      alt={`Upload ${idx + 1}`}
+                                      alt={`Upload`}
                                       className="w-full h-24 object-cover rounded-lg"
                                     />
                                     <Button
@@ -424,11 +424,11 @@ export default function PatientsPage() {
                               Recent Chat Messages
                             </h4>
                             <div className="space-y-2 max-h-40 overflow-y-auto">
-                              {patientDetails.chatHistory.slice(0, 5).map((chat, idx) => (
-                                <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                              {patientDetails.chatHistory.slice(0, 5).map((chat) => (
+                                <div key={chat.id} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                                   <p className="text-sm">{chat.lastMessage || "Chat session"}</p>
                                   <p className="text-xs text-gray-500">
-                                    {chat.createdAt?.toDate?.()?.toLocaleDateString()}
+                                    {chat.createdAt?.toDate?.()?.toISOString().slice(0, 10)}
                                   </p>
                                 </div>
                               ))}

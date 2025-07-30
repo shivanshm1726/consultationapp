@@ -16,9 +16,7 @@ import {
 
 const navigation = [
   { name: "Overview", href: "/reception/overview", icon: BarChart3Icon },
-  { name: "Patients", href: "/reception/patients", icon: UsersIcon },
   { name: "Payments", href: "/reception/payments", icon: CreditCardIcon },
-  { name: "Settings", href: "/reception/settings", icon: SettingsIcon },
 ]
 
 export default function Sidebar() {
