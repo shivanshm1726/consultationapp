@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { User, Clock, AlertCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { toast } from "@/components/ui/use-toast"
 
 type ActiveChat = {
   id: string
@@ -27,6 +28,10 @@ export default function PatientList() {
   const router = useRouter()
 
   useEffect(() => {
+  let retryCount = 0
+  const maxRetries = 3
+
+  const setupListener = () => {
     const q = query(
       collection(db, "activeChats"),
       where("status", "==", "active"),
@@ -34,10 +39,16 @@ export default function PatientList() {
     )
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      console.log("Snapshot received:", {
+        docCount: snapshot.docs.length,
+        docs: snapshot.docs.map(doc => ({ id: doc.id, data: doc.data() }))
+      })
+      
       const chats = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       })) as ActiveChat[]
+
       const uniqueChats = Object.values(
         chats.reduce((acc, chat) => {
           if (!acc[chat.patientEmail] || chat.timestamp > acc[chat.patientEmail].timestamp) {
@@ -46,13 +57,34 @@ export default function PatientList() {
           return acc
         }, {} as Record<string, ActiveChat>)
       )
+
       setActiveChats(uniqueChats)
+      retryCount = 0
     }, (error) => {
-      console.error("Error fetching active chats:", error)
+      console.error("Snapshot error:", {
+        errorCode: error.code,
+        errorMessage: error.message,
+        retryCount,
+      })
+      
+      if (retryCount < maxRetries) {
+        retryCount++
+        setTimeout(() => setupListener(), 2000 * retryCount)
+      } else {
+        toast({
+          title: "Connection Error",
+          description: "Failed to load active chats. Please refresh the page.",
+          variant: "destructive",
+        })
+      }
     })
 
-    return () => unsubscribe()
-  }, [])
+    return unsubscribe
+  }
+
+  const unsubscribe = setupListener()
+  return () => unsubscribe()
+}, [])
 
   const handleSelectPatient = (patientEmail: string) => {
     router.push(`/admin/chat?patientEmail=${patientEmail}`)

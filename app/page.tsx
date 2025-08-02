@@ -1,4 +1,5 @@
 "use client"
+import { useDarkMode } from "@/contexts/dark-mode-context"
 import { useRouter } from "next/navigation";
 import { useState, useRef } from "react"
 import Link from "next/link"
@@ -26,9 +27,9 @@ import { useAuth } from "@/contexts/auth-context"
 import { logoutUser } from "@/lib/auth"
 
 export default function HomePage() {
+  const { darkMode, toggleDarkMode } = useDarkMode()
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [darkMode, setDarkMode] = useState(false)
   const [showServices, setShowServices] = useState(true)
   const [showGallery, setShowGallery] = useState(false)
   const [serviceScrollPosition, setServiceScrollPosition] = useState(0)
@@ -57,50 +58,50 @@ export default function HomePage() {
   }
 
   // Update the services array with image URLs
-const services = [
-  {
-    title: "Laser Hair Removal",
-    description:
-      "In Our Clinic, We use the latest laser machine which uses state-of-the-art to remove unwanted hair and with greater speed and comfort than other methods. Each laser pulse can treat multiple hairs in a fraction of a second, making treatments quick.",
-    icon: "✨",
-    image: "/laserhairremoval.jpg", // Replace with your image path or URL
-  },
-  {
-    title: "Chemical Peeling",
-    description:
-      "Chemical peels is best method for skin tightening and skin whitening. Chemical peels uses a chemical solution to improve and smooth the texture of the facial skin by removing its damaged outer layer, recovery varies by peel depth.",
-    icon: "🧴",
-    image: "/chemicalpeeling.jpg", // Replace with your image path or URL
-  },
-  {
-    title: "Vitiligo Surgery",
-    description:
-      "Vitiligo is a chronic skin disorder that causes areas of skin to lose colour. It presents as depigmented (white) patches. The goal of vitiligo surgery is to achieve Cultured and Non Cultured Melanocyte Transfer, Blister Grafting, Punch Grafting, Split Thickness etc.",
-    icon: "🏥",
-    image: "/vitiligo.jpg", // Replace with your image path or URL
-  },
-  {
-    title: "Electro Surgery",
-    description:
-      "Electro surgery refers to the cutting and coagulation of tissue using high-frequency electrical current. In addition, they should understand the mechanism of action, recovery time varies depending on the size and depth of the treated area",
-    icon: "⚡",
-    image: "/electrosurgery.jpeg", // Replace with your image path or URL
-  },
-  {
-    title: "Radio Frequency Surgery",
-    description:
-      "At Our Clinic, all these problems can be cured in one sitting with the help of latest and innovative RADIO FREQUENCY MACHINE. This machine removes the unwanted mole, skin tags, sun spots, warts without any scarring and with no or very minimal bleeding.",
-    icon: "📡",
-    image: "/radiofrequency.jpeg", // Replace with your image path or URL
-  },
-  {
-    title: "Acne Surgery",
-    description:
-      "Acne or pimples is a common teenage problem. Medically acne problem is categorized into active acne (comedons, white heads, black heads), acne pigment (red, brown and black) and acne scars (atrophic, hypertrophic and ice-pick).",
-    icon: "🎯",
-    image: "/acnesurgery.jpeg", // Replace with your image path or URL
-  },
-];
+  const services = [
+    {
+      title: "Laser Hair Removal",
+      description:
+        "In Our Clinic, We use the latest laser machine which uses state-of-the-art to remove unwanted hair and with greater speed and comfort than other methods. Each laser pulse can treat multiple hairs in a fraction of a second, making treatments quick.",
+      icon: "✨",
+      image: "/laserhairremoval.jpg", // Replace with your image path or URL
+    },
+    {
+      title: "Chemical Peeling",
+      description:
+        "Chemical peels is best method for skin tightening and skin whitening. Chemical peels uses a chemical solution to improve and smooth the texture of the facial skin by removing its damaged outer layer, recovery varies by peel depth.",
+      icon: "🧴",
+      image: "/chemicalpeeling.jpg", // Replace with your image path or URL
+    },
+    {
+      title: "Vitiligo Surgery",
+      description:
+        "Vitiligo is a chronic skin disorder that causes areas of skin to lose colour. It presents as depigmented (white) patches. The goal of vitiligo surgery is to achieve Cultured and Non Cultured Melanocyte Transfer, Blister Grafting, Punch Grafting, Split Thickness etc.",
+      icon: "🏥",
+      image: "/vitiligo.jpg", // Replace with your image path or URL
+    },
+    {
+      title: "Electro Surgery",
+      description:
+        "Electro surgery refers to the cutting and coagulation of tissue using high-frequency electrical current. In addition, they should understand the mechanism of action, recovery time varies depending on the size and depth of the treated area",
+      icon: "⚡",
+      image: "/electrosurgery.jpeg", // Replace with your image path or URL
+    },
+    {
+      title: "Radio Frequency Surgery",
+      description:
+        "At Our Clinic, all these problems can be cured in one sitting with the help of latest and innovative RADIO FREQUENCY MACHINE. This machine removes the unwanted mole, skin tags, sun spots, warts without any scarring and with no or very minimal bleeding.",
+      icon: "📡",
+      image: "/radiofrequency.jpeg", // Replace with your image path or URL
+    },
+    {
+      title: "Acne Surgery",
+      description:
+        "Acne or pimples is a common teenage problem. Medically acne problem is categorized into active acne (comedons, white heads, black heads), acne pigment (red, brown and black) and acne scars (atrophic, hypertrophic and ice-pick).",
+      icon: "🎯",
+      image: "/acnesurgery.jpeg", // Replace with your image path or URL
+    },
+  ];
 
   // Sample gallery images (replace with your own URLs or local paths)
   const galleryImages = [
@@ -118,9 +119,8 @@ const services = [
     >
       {/* Header */}
       <header
-        className={`sticky top-0 z-50 backdrop-blur-md border-b transition-all duration-300 ${
-          darkMode ? "bg-slate-900/80 border-slate-700" : "bg-white/80 border-white/20"
-        }`}
+        className={`sticky top-0 z-50 backdrop-blur-md border-b transition-all duration-300 ${darkMode ? "bg-slate-900/80 border-slate-700" : "bg-white/80 border-white/20"
+          }`}
       >
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -166,8 +166,18 @@ const services = [
             </nav>
 
             <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="sm" onClick={() => setDarkMode(!darkMode)} className="p-2">
-                {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleDarkMode}
+                className="p-2"
+                aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {darkMode ? (
+                  <Sun className="h-4 w-4" />
+                ) : (
+                  <Moon className="h-4 w-4" />
+                )}
               </Button>
 
               {user ? (
@@ -213,9 +223,8 @@ const services = [
           {/* Mobile Menu */}
           {mobileMenuOpen && (
             <div
-              className={`md:hidden mt-4 p-4 rounded-lg backdrop-blur-md ${
-                darkMode ? "bg-slate-800/90" : "bg-white/90"
-              }`}
+              className={`md:hidden mt-4 p-4 rounded-lg backdrop-blur-md ${darkMode ? "bg-slate-800/90" : "bg-white/90"
+                }`}
             >
               <nav className="flex flex-col space-y-3">
                 <Link href="/" className="text-indigo-600 font-medium">
@@ -266,9 +275,8 @@ const services = [
               <div className="space-y-4">
                 <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200">20+ Years Experience</Badge>
                 <h1
-                  className={`text-4xl md:text-6xl font-bold leading-tight ${
-                    darkMode ? "text-white" : "text-gray-900"
-                  }`}
+                  className={`text-4xl md:text-6xl font-bold leading-tight ${darkMode ? "text-white" : "text-gray-900"
+                    }`}
                 >
                   Expert Skin Care with{" "}
                   <span className="bg-gradient-to-r from-indigo-600 to-teal-600 bg-clip-text text-transparent">
@@ -292,20 +300,19 @@ const services = [
                     <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
-                <Link href="/patient/chat">
+                <Link href="/chat">
                   <Button
                     size="lg"
                     variant="outline"
-                    className={`text-lg px-8 py-4 backdrop-blur-sm ${
-                      darkMode
-                        ? "border-gray-600 text-gray-300 hover:bg-gray-800"
-                        : "border-white/20 bg-white/10 hover:bg-white/20"
-                    }`}
+                    className={`text-lg px-8 py-4 backdrop-blur-sm ${darkMode
+                      ? "border-gray-600 text-gray-300 hover:bg-gray-800"
+                      : "border-white/20 bg-white/10 hover:bg-white/20"
+                      }`}
                   >
                     Start Live Chat
                   </Button>
                 </Link>
-                
+
               </div>
 
               <div className="flex items-center space-x-8">
@@ -418,90 +425,89 @@ const services = [
 
       {/* Services */}
       <section className="py-20">
-  <div className="container mx-auto px-4">
-    <div className="text-center mb-16">
-      <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 mb-4">Why Choose Us</Badge>
-      <h2 className={`text-3xl md:text-4xl font-bold mb-4 ${darkMode ? "text-white" : "text-gray-900"}`}>
-        Reasons to Trust Dr. Nitin Mishra
-      </h2>
-      <p className={`text-xl max-w-2xl mx-auto mb-8 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-        Experience, expertise, and personalized care for your skin health
-      </p>
-      <Button
-        onClick={() => setShowServices(!showServices)}
-        className="bg-gradient-to-r from-indigo-600 to-teal-600 hover:from-indigo-700 hover:to-teal-700 shadow-lg"
-      >
-        {showServices ? "Hide Services" : "View Services"}
-      </Button>
-
-      {/* Interactive Service Cards */}
-      {showServices && (
-        <div className="mt-12 relative">
-          <div className="flex items-center justify-center space-x-4 mb-6">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 mb-4">Why Choose Us</Badge>
+            <h2 className={`text-3xl md:text-4xl font-bold mb-4 ${darkMode ? "text-white" : "text-gray-900"}`}>
+              Reasons to Trust Dr. Nitin Mishra
+            </h2>
+            <p className={`text-xl max-w-2xl mx-auto mb-8 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+              Experience, expertise, and personalized care for your skin health
+            </p>
             <Button
-              variant="outline"
-              size="sm"
-              onClick={() => scrollServices("left")}
-              className="rounded-full p-2"
+              onClick={() => setShowServices(!showServices)}
+              className="bg-gradient-to-r from-indigo-600 to-teal-600 hover:from-indigo-700 hover:to-teal-700 shadow-lg"
             >
-              <ArrowLeft className="h-4 w-4" />
+              {showServices ? "Hide Services" : "View Services"}
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => scrollServices("right")}
-              className="rounded-full p-2"
-            >
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
 
-          <div className="overflow-hidden">
-            <div
-              ref={servicesRef}
-              className="flex space-x-6 transition-transform duration-500 ease-in-out"
-              style={{ transform: `translateX(-${serviceScrollPosition * 320}px)` }}
-            >
-              {services.map((service, index) => (
-                <div
-                  key={index}
-                  className={`min-w-[350px] group shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-300 border-0 rounded-xl p-6 ${
-                    darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
-                  }`}
-                >
-                  <div className="text-center">
-                    <div className="text-4xl mb-4">{service.icon}</div>
-                    <img
-                      src={service.image}
-                      alt={service.title}
-                      className="w-full h-32 object-cover rounded-lg mb-4"
-                      onError={(e) => {
-                        e.currentTarget.src = "/placeholder.svg?height=150&width=300"; // Fallback image
-                      }}
-                    />
-                    <h3 className={`text-xl font-semibold mb-3 ${darkMode ? "text-white" : "text-blue-900"}`}>
-                      {service.title}
-                    </h3>
-                    <p className={`mb-4 text-sm leading-relaxed ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-                      {service.description}
-                    </p>
-                    <Link href="/appointment">
-                      <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white transition-all">
-                        Book Now
-                      </Button>
-                    </Link>
+            {/* Interactive Service Cards */}
+            {showServices && (
+              <div className="mt-12 relative">
+                <div className="flex items-center justify-center space-x-4 mb-6">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => scrollServices("left")}
+                    className="rounded-full p-2"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => scrollServices("right")}
+                    className="rounded-full p-2"
+                  >
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="overflow-hidden">
+                  <div
+                    ref={servicesRef}
+                    className="flex space-x-6 transition-transform duration-500 ease-in-out"
+                    style={{ transform: `translateX(-${serviceScrollPosition * 320}px)` }}
+                  >
+                    {services.map((service, index) => (
+                      <div
+                        key={index}
+                        className={`min-w-[350px] group shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-300 border-0 rounded-xl p-6 ${darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
+                          }`}
+                      >
+                        <div className="text-center">
+                          <div className="text-4xl mb-4">{service.icon}</div>
+                          <img
+                            src={service.image}
+                            alt={service.title}
+                            className="w-full h-32 object-cover rounded-lg mb-4"
+                            onError={(e) => {
+                              e.currentTarget.src = "/placeholder.svg?height=150&width=300"; // Fallback image
+                            }}
+                          />
+                          <h3 className={`text-xl font-semibold mb-3 ${darkMode ? "text-white" : "text-blue-900"}`}>
+                            {service.title}
+                          </h3>
+                          <p className={`mb-4 text-sm leading-relaxed ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+                            {service.description}
+                          </p>
+                          <Link href="/appointment">
+                            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white transition-all">
+                              Book Now
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+
+            <p className="text-center font-semibold text-lg mt-8">Consultation Fee: ₹500</p>
           </div>
         </div>
-      )}
-
-      <p className="text-center font-semibold text-lg mt-8">Consultation Fee: ₹500</p>
-    </div>
-  </div>
-</section>
+      </section>
 
       {/* Interactive Gallery Preview */}
       <section className="py-20">
@@ -519,9 +525,8 @@ const services = [
             {galleryImages.slice(0, 3).map((image, index) => (
               <Card
                 key={index}
-                className={`group cursor-pointer hover:shadow-xl transition-all duration-300 border-0 overflow-hidden ${
-                  darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
-                }`}
+                className={`group cursor-pointer hover:shadow-xl transition-all duration-300 border-0 overflow-hidden ${darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
+                  }`}
                 onClick={() => setShowGallery(true)}
               >
                 <div className="relative">
@@ -649,7 +654,7 @@ const services = [
                 Book Appointment
               </Button>
             </Link>
-            <Link href="/patient/chat">
+            <Link href="/chat">
               <Button
                 size="lg"
                 variant="outline"
@@ -757,7 +762,7 @@ const services = [
       {/* Mobile Bottom CTA */}
       <div className="fixed bottom-0 left-0 right-0 md:hidden bg-white/90 backdrop-blur-md border-t border-gray-200 p-4 z-50">
         <div className="flex space-x-3">
-          <Link href="/patient/chat" className="flex-1">
+          <Link href="/chat" className="flex-1">
             <Button variant="outline" className="w-full bg-transparent">
               Chat Now
             </Button>

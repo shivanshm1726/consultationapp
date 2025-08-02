@@ -3,7 +3,7 @@
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { auth, db, storage } from "@/lib/firebase"
-import { addDoc, collection, orderBy, query, serverTimestamp, onSnapshot, where, updateDoc, doc, getDocs, deleteDoc } from "firebase/firestore"
+import { addDoc, collection, orderBy, query, serverTimestamp, onSnapshot, where, updateDoc, getDocs, getDoc, deleteDoc, doc, setDoc } from "firebase/firestore"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
@@ -39,13 +39,13 @@ import type { User as FirebaseUser } from "firebase/auth"
 type MessageType = {
   id: string
   text?: string
-  senderEmail: string
-  timestamp: any
+  senderEmail: string // Required
+  timestamp: any // Firestore Timestamp or Date
   mediaUrl?: string
   mediaType?: "image" | "video" | "file"
   fileName?: string
-  uid?: string
-  photoURL?: string | null
+  uid?: string // Optional: for sender's UID (from auth)
+  photoURL?: string | null // Optional: for sender's photo (from auth) - Allow null
 }
 
 function LiveChatContent() {
@@ -122,20 +122,42 @@ function LiveChatContent() {
       return
     }
 
-    setChatStarted(true)
-    setMessages([
-      {
-        id: uuidv4(),
-        senderEmail: "system",
-        text: `Hello ${preFormData.name}! Please wait until Dr. Nitin Mishra joins the chat.`,
-        timestamp: new Date(),
-      },
-    ])
-
     if (user?.email && roomId) {
       try {
+        console.log("=== USER AUTHENTICATION DEBUG ===")
+        console.log("Current user:", user)
+        console.log("User UID:", user.uid)
+        console.log("User email:", user.email)
+        console.log("User display name:", user.displayName)
+
+        // Check if user document exists and what role they have
+        try {
+          const userDocRef = doc(db, "users", user.uid)
+          const userDoc = await getDoc(userDocRef)
+          
+          if (userDoc.exists()) {
+            console.log("User document exists:", userDoc.data())
+            console.log("User role:", userDoc.data().role)
+          } else {
+            console.log("❌ User document does NOT exist in Firestore!")
+            console.log("This might be causing permission issues")
+          }
+        } catch (userError) {
+          console.error("❌ Error fetching user document:", userError)
+        }
+
         const activeChatsRef = collection(db, "activeChats")
         const q = query(activeChatsRef, where("patientEmail", "==", user.email), where("status", "==", "active"))
+        
+        console.log("=== TESTING FIRESTORE PERMISSIONS ===")
+        try {
+          console.log("Testing read permissions...")
+          const testSnapshot = await getDocs(q)
+          console.log("✅ Read permission successful, found docs:", testSnapshot.docs.length)
+        } catch (readError) {
+          console.error("❌ Read permission failed:", readError)
+        }
+
         const snapshot = await getDocs(q)
 
         const chatData = {
@@ -151,26 +173,80 @@ function LiveChatContent() {
           status: "active",
         }
 
+        console.log("=== DEBUG: About to create/update activeChats ===")
+        console.log("User email:", user.email)
+        console.log("Room ID:", roomId)
+        console.log("Chat data:", chatData)
+        console.log("Existing documents found:", snapshot.docs.length)
+
         if (!snapshot.empty) {
           const existingDoc = snapshot.docs[0]
+          console.log("🔄 Updating existing document:", existingDoc.id)
           await updateDoc(existingDoc.ref, chatData)
-          console.log("Updated activeChats document:", chatData)
+          console.log("✅ Document updated successfully")
         } else {
-          const docRef = await addDoc(activeChatsRef, chatData)
-          console.log("Created new activeChats document with ID:", docRef.id, chatData)
+          console.log("📝 Creating new document")
+          
+          try {
+            console.log("About to call addDoc with:", {
+              collection: "activeChats",
+              data: chatData
+            })
+            
+            const docRef = await addDoc(activeChatsRef, chatData)
+            console.log("✅ addDoc returned successfully with ID:", docRef.id)
+            
+            // Verify document creation
+            setTimeout(async () => {
+              try {
+                const createdDoc = await getDoc(docRef)
+                if (createdDoc.exists()) {
+                  console.log("✅ Document verified in Firestore:", createdDoc.data())
+                } else {
+                  console.log("❌ Document not found after creation!")
+                }
+              } catch (verifyError) {
+                console.error("❌ Error verifying document:", verifyError)
+              }
+            }, 1000)
+            
+          } catch (createError) {
+            console.error("❌ Document creation failed:", createError)
+            if (typeof createError === "object" && createError !== null && "code" in createError) {
+              console.error("Error code:", (createError as any).code)
+            }
+            console.error("Error message:", (createError as Error)?.message)
+            throw createError
+          }
         }
+
+        console.log("=== Document operation completed successfully ===")
+
       } catch (error: any) {
-        console.error("Error managing active chat (activeChats):", error)
-        if (error && error.code) {
-          alert(`Firestore error: ${error.code} - ${error.message}`)
-        }
+        console.error("=== ERROR in handlePreFormSubmit ===")
+        console.error("Error type:", error.constructor.name)
+        console.error("Error message:", error.message)
+        console.error("Error code:", error.code)
+        console.error("Full error:", error)
+        
         toast({
           title: "Error",
-          description: "Failed to start chat. Please try again.",
+          description: `Failed to start chat: ${error.message}`,
           variant: "destructive",
         })
+        return
       }
     }
+
+    setChatStarted(true)
+    setMessages([
+      {
+        id: uuidv4(),
+        senderEmail: "system",
+        text: `Hello ${preFormData.name}! Please wait until Dr. Nitin Mishra joins the chat.`,
+        timestamp: new Date(),
+      },
+    ])
   }
 
   const handleInputChange = (field: string, value: string) => {
@@ -180,31 +256,74 @@ function LiveChatContent() {
     }
   }
 
-  const removeFromActiveChats = async () => {
-    if (user?.email) {
+  const removeFromActiveChats = async (force: boolean = false) => {
+    if (user?.email && (force || window.confirm("Are you sure you want to end this chat?"))) {
       try {
         const activeChatsRef = collection(db, "activeChats")
         const q = query(activeChatsRef, where("patientEmail", "==", user.email), where("status", "==", "active"))
         const snapshot = await getDocs(q)
-        const deletePromises = snapshot.docs.map((doc) => deleteDoc(doc.ref))
+        console.log("Removing active chats, found:", snapshot.docs.length, "documents")
+        const deletePromises = snapshot.docs.map((doc) => {
+          console.log("Deleting document:", doc.id, doc.data())
+          return deleteDoc(doc.ref)
+        })
         await Promise.all(deletePromises)
+        console.log("Active chats removed successfully")
       } catch (error) {
-        console.error("Error removing from active chats:", error)
+        console.error("Error removing from active chats:", {
+          errorCode: (error as any).code,
+          errorMessage: (error as Error).message,
+          stack: (error as Error).stack
+        })
       }
+    } else {
+      console.log("Skipped removing active chats, force:", force, "user:", user?.email)
     }
   }
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged(async (loggedInUser: FirebaseUser | null) => {
       if (loggedInUser) {
+        console.log("=== AUTH STATE CHANGE ===")
+        console.log("User logged in:", loggedInUser.email)
+        
         setPreFormData((prev) => ({
           ...prev,
           name: loggedInUser.displayName || loggedInUser.email?.split("@")[0] || "",
         }))
 
+        try {
+          const userDocRef = doc(db, "users", loggedInUser.uid)
+          const userDoc = await getDoc(userDocRef)
+          
+          if (!userDoc.exists()) {
+            console.log("Creating user document for:", loggedInUser.email)
+            const userData = {
+              uid: loggedInUser.uid,
+              email: loggedInUser.email,
+              role: "patient",
+              displayName: loggedInUser.displayName || "",
+              createdAt: serverTimestamp(),
+            }
+            await setDoc(userDocRef, userData)
+            console.log("✅ User document created successfully")
+            const verifyDoc = await getDoc(userDocRef)
+            if (verifyDoc.exists()) {
+              console.log("✅ User document verified:", verifyDoc.data())
+            } else {
+              console.log("❌ User document creation failed verification")
+            }
+          } else {
+            console.log("✅ User document already exists:", userDoc.data())
+          }
+        } catch (userCreationError) {
+          console.error("❌ Error creating/checking user document:", userCreationError)
+        }
+
         const sortedEmails = [loggedInUser.email!, doctorEmail].sort()
         const currentRoomId = `${sortedEmails[0]}_${sortedEmails[1]}`
         setRoomId(currentRoomId)
+        console.log("Room ID set to:", currentRoomId)
 
         const messagesRef = collection(db, "chats", currentRoomId, "messages")
         const q = query(messagesRef, orderBy("timestamp"))
@@ -212,6 +331,7 @@ function LiveChatContent() {
         const unsubMessages = onSnapshot(
           q,
           (snapshot) => {
+            console.log("Messages snapshot received, count:", snapshot.docs.length)
             const newMessages: MessageType[] = snapshot.docs.map((doc) => {
               const data = doc.data()
               return {
@@ -229,29 +349,39 @@ function LiveChatContent() {
             setMessages(newMessages)
           },
           (error) => {
-            console.error("Error listening to messages: ", error)
+            console.error("Error listening to messages:", {
+              errorCode: (error as any).code,
+              errorMessage: (error as Error).message,
+              stack: (error as Error).stack
+            })
             toast({
               title: "Error",
               description: "Failed to load messages. Please try again.",
               variant: "destructive",
             })
-          },
+          }
         )
 
-        return () => unsubMessages()
+        return () => {
+          console.log("Cleaning up messages listener for room:", currentRoomId)
+          unsubMessages()
+        }
       } else {
-        await removeFromActiveChats()
+        console.log("No user logged in, redirecting to home")
+        await removeFromActiveChats(false)
         router.push("/")
       }
     })
 
     const handleBeforeUnload = async () => {
-      await removeFromActiveChats()
+      console.log("Before unload triggered")
+      await removeFromActiveChats(false)
     }
 
     const handleVisibilityChange = async () => {
       if (document.hidden) {
-        await removeFromActiveChats()
+        console.log("Tab hidden, skipping active chats removal")
+        // Disabled auto-deletion on visibility change
       }
     }
 
@@ -259,10 +389,11 @@ function LiveChatContent() {
     document.addEventListener("visibilitychange", handleVisibilityChange)
 
     return () => {
+      console.log("Cleaning up auth and event listeners")
       unsubscribeAuth()
       window.removeEventListener("beforeunload", handleBeforeUnload)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
-      removeFromActiveChats()
+      // Removed removeFromActiveChats from cleanup to prevent unintended deletion
     }
   }, [user, router, doctorEmail])
 
@@ -336,12 +467,17 @@ function LiveChatContent() {
   const handleEndConsultation = async () => {
     if (window.confirm("Are you sure you want to end this consultation? This will clear your chat history.")) {
       try {
-        await removeFromActiveChats()
-        
+        console.log("Ending consultation for user:", user?.email)
+        await removeFromActiveChats(true) // Force deletion
+
         if (roomId) {
           const messagesRef = collection(db, "chats", roomId, "messages")
           const snapshot = await getDocs(messagesRef)
-          const deletePromises = snapshot.docs.map((doc) => deleteDoc(doc.ref))
+          console.log("Deleting messages, found:", snapshot.docs.length, "documents")
+          const deletePromises = snapshot.docs.map((doc) => {
+            console.log("Deleting message:", doc.id)
+            return deleteDoc(doc.ref)
+          })
           await Promise.all(deletePromises)
         }
         setChatStarted(false)
@@ -356,9 +492,14 @@ function LiveChatContent() {
           contact: "",
           urgency: "",
         })
+        console.log("Consultation ended, redirecting to home")
         router.push("/")
       } catch (err) {
-        console.error("Error ending consultation: ", err)
+        console.error("Error ending consultation:", {
+          errorCode: (err as any).code,
+          errorMessage: (err as Error).message,
+          stack: (err as Error).stack
+        })
         toast({
           title: "Error",
           description: "Failed to end consultation. Please try again or contact support.",
@@ -395,6 +536,7 @@ function LiveChatContent() {
   if (!chatStarted) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+        {/* Header */}
         <header className="bg-white/80 backdrop-blur-md shadow-sm border-b sticky top-0 z-50 dark:bg-gray-800/80 dark:border-gray-700">
           <div className="container mx-auto px-4 py-4">
             <div className="flex items-center justify-between">
@@ -559,6 +701,7 @@ function LiveChatContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      {/* Header */}
       <header className="bg-white/80 backdrop-blur-md shadow-sm border-b sticky top-0 z-50 dark:bg-gray-800/80 dark:border-gray-700">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <div className="flex items-center space-x-4">
@@ -579,8 +722,10 @@ function LiveChatContent() {
       </header>
 
       <div className="container mx-auto px-4 py-4 h-[calc(100vh-80px)] grid lg:grid-cols-4 gap-4">
+        {/* Chat Section */}
         <div className="lg:col-span-3 flex flex-col">
           <Card className="flex-1 flex flex-col bg-white/70 dark:bg-gray-800/70 shadow-xl border-0">
+            {/* Chat Header */}
             <CardHeader className="border-b bg-gradient-to-r from-blue-50 to-blue-50 dark:from-gray-700 dark:to-gray-700">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
@@ -615,6 +760,7 @@ function LiveChatContent() {
               </div>
             </CardHeader>
 
+            {/* Chat Messages */}
             <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.length === 0 && (
                 <div className="text-center py-8">
@@ -629,12 +775,13 @@ function LiveChatContent() {
                   className={`flex ${msg.senderEmail === user?.email ? "justify-end" : "justify-start"} mb-2`}
                 >
                   <div
-                    className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg shadow-sm ${msg.senderEmail === user?.email
+                    className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg shadow-sm ${
+                      msg.senderEmail === user?.email
                         ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white"
                         : msg.senderEmail === "system"
                           ? "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-700"
                           : "bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border dark:border-gray-700"
-                      }`}
+                    }`}
                   >
                     {msg.text && <p className="text-sm leading-relaxed">{msg.text}</p>}
 
@@ -672,6 +819,7 @@ function LiveChatContent() {
               <div ref={bottomRef} />
             </CardContent>
 
+            {/* Message Input */}
             <div className="border-t p-4 bg-white/50 dark:bg-gray-700/50">
               {patientQuickReplies.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-3">
@@ -721,6 +869,7 @@ function LiveChatContent() {
           </Card>
         </div>
 
+        {/* Sidebar */}
         <div className="space-y-4">
           <Card className="bg-white/70 dark:bg-gray-800/70 shadow-xl border-0">
             <CardHeader>

@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Stethoscope } from "lucide-react"
+import { ArrowLeft, Stethoscope, Sun, Moon } from "lucide-react" // Add Sun and Moon icons
+import { useDarkMode } from "@/contexts/dark-mode-context"
 
 export default function GalleryPage() {
-  const [darkMode, setDarkMode] = useState(false)
+  const { darkMode, toggleDarkMode } = useDarkMode()
   const [visibleImages, setVisibleImages] = useState<number[]>([])
 
   const galleryImages = [
@@ -44,9 +45,8 @@ export default function GalleryPage() {
     <div className={`min-h-screen transition-colors duration-300 ${darkMode ? "bg-slate-900" : "bg-slate-50"}`}>
       {/* Header */}
       <header
-        className={`sticky top-0 z-50 backdrop-blur-md border-b transition-all duration-300 ${
-          darkMode ? "bg-slate-900/80 border-slate-700" : "bg-white/80 border-slate-200"
-        }`}
+        className={`sticky top-0 z-50 backdrop-blur-md border-b transition-all duration-300 ${darkMode ? "bg-slate-900/80 border-slate-700" : "bg-white/80 border-slate-200"
+          }`}
       >
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -70,8 +70,14 @@ export default function GalleryPage() {
               </div>
             </div>
 
-            <Button variant="ghost" size="sm" onClick={() => setDarkMode(!darkMode)} className="p-2">
-              {darkMode ? "Light Mode" : "Dark Mode"}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleDarkMode}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700"
+              aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
           </div>
         </div>
@@ -81,16 +87,14 @@ export default function GalleryPage() {
         {/* Page Header */}
         <div className="text-center mb-16">
           <h1
-            className={`text-4xl md:text-5xl font-bold mb-4 transition-all duration-1000 transform ${
-              darkMode ? "text-slate-100" : "text-blue-900"
-            }`}
+            className={`text-4xl md:text-5xl font-bold mb-4 transition-all duration-1000 transform ${darkMode ? "text-slate-100" : "text-blue-900"
+              }`}
           >
             Our Modern Facilities
           </h1>
           <p
-            className={`text-xl max-w-3xl mx-auto transition-all duration-1000 delay-300 transform ${
-              darkMode ? "text-slate-300" : "text-gray-600"
-            }`}
+            className={`text-xl max-w-3xl mx-auto transition-all duration-1000 delay-300 transform ${darkMode ? "text-slate-300" : "text-gray-600"
+              }`}
           >
             Take a virtual tour of our state-of-the-art clinic and advanced medical equipment
           </p>
@@ -102,15 +106,13 @@ export default function GalleryPage() {
             <div
               key={image.id}
               data-id={image.id}
-              className={`group cursor-pointer transition-all duration-700 transform ${
-                visibleImages.includes(image.id) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
-              }`}
+              className={`group cursor-pointer transition-all duration-700 transform ${visibleImages.includes(image.id) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+                }`}
               style={{ transitionDelay: `${index * 100}ms` }}
             >
               <div
-                className={`overflow-hidden rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-300 ${
-                  darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
-                }`}
+                className={`overflow-hidden rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-300 ${darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
+                  }`}
               >
                 <div className="relative overflow-hidden">
                   <img
@@ -132,9 +134,8 @@ export default function GalleryPage() {
                     {image.title}
                   </h3>
                   <span
-                    className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                      darkMode ? "bg-blue-900 text-blue-200" : "bg-blue-100 text-blue-800"
-                    }`}
+                    className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${darkMode ? "bg-blue-900 text-blue-200" : "bg-blue-100 text-blue-800"
+                      }`}
                   >
                     {image.category}
                   </span>
@@ -147,9 +148,8 @@ export default function GalleryPage() {
         {/* Contact Section */}
         <div className="mt-20 text-center">
           <div
-            className={`max-w-2xl mx-auto p-8 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 ${
-              darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
-            }`}
+            className={`max-w-2xl mx-auto p-8 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 ${darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
+              }`}
           >
             <h2 className={`text-2xl font-bold mb-4 ${darkMode ? "text-slate-100" : "text-blue-900"}`}>
               Visit Our Clinic

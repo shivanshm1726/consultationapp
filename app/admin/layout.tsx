@@ -1,208 +1,225 @@
 "use client"
-
+import { ThemeProvider } from 'next-themes'
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useAuthState } from "react-firebase-hooks/auth"
-import { auth } from "@/lib/firebase"
-import { useRouter, usePathname } from "next/navigation"
-import Link from "next/link"
-import { motion, AnimatePresence } from "framer-motion"
-import { Button } from "@/components/ui/button"
-import { useTheme } from "next-themes"
+import { doc, getDoc, onSnapshot } from "firebase/firestore"
+import { auth, db } from "@/lib/firebase"
+import { collection, query, where } from "firebase/firestore"
 import {
-  LayoutDashboard,
-  Calendar,
-  Users,
-  MessageSquare,
-  Phone,
-  DollarSign,
-  Settings,
-  Menu,
-  X,
-  Sun,
-  Moon,
-  LogOut,
-  Stethoscope,
-} from "lucide-react"
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+  SidebarInset,
+} from "@/components/ui/sidebar"
+import { LayoutDashboard, Calendar, Users, DollarSign, LogOut, Bell, Stethoscope } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
+import { motion } from "framer-motion"
 
-const sidebarItems = [
-  { icon: LayoutDashboard, label: "Dashboard", href: "/admin/dashboard" },
-  { icon: Calendar, label: "Appointments", href: "/admin/appointments" },
-  { icon: Users, label: "Patients", href: "/admin/patients" },
-  { icon: MessageSquare, label: "Chat", href: "/admin/chat" },
-  { icon: Phone, label: "Calls", href: "/admin/calls" },
-  { icon: DollarSign, label: "Revenue", href: "/admin/revenue" },
-  { icon: Settings, label: "Settings", href: "/admin/settings" },
-]
+interface DoctorLayoutProps {
+  children: React.ReactNode
+}
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [user, loading] = useAuthState(auth)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const { theme, setTheme } = useTheme()
-  const router = useRouter()
+export default function DoctorLayout({ children }: DoctorLayoutProps) {
+  const [user] = useAuthState(auth)
+  const [doctorName, setDoctorName] = useState<string>("")
+  const [waitingPatients, setWaitingPatients] = useState<number>(0)
   const pathname = usePathname()
-
-  const doctorEmail = process.env.NEXT_PUBLIC_DOCTOR_EMAIL
+  const router = useRouter()
 
   useEffect(() => {
-    if (!loading && (!user || user.email !== doctorEmail)) {
-      router.push("/login")
+    if (user) {
+      fetchDoctorInfo()
+      const waitingQuery = query(collection(db, "chats"), where("status", "==", "waiting"))
+      const unsubscribe = onSnapshot(waitingQuery, (snapshot) => {
+        setWaitingPatients(snapshot.size)
+      })
+
+      return () => unsubscribe()
     }
-  }, [user, loading, router, doctorEmail])
+  }, [user])
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-blue-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-      </div>
-    )
-  }
+  const fetchDoctorInfo = async () => {
+    if (!user) return
 
-  if (!user || user.email !== doctorEmail) {
-    return null
+    try {
+      const userDoc = await getDoc(doc(db, "users", user.uid))
+      if (userDoc.exists()) {
+        const userData = userDoc.data()
+        setDoctorName(userData.fullName || "Doctor")
+      }
+    } catch (error) {
+      console.error("Error fetching doctor info:", error)
+    }
   }
 
   const handleLogout = async () => {
-    await auth.signOut()
-    router.push("/login")
+    try {
+      await auth.signOut()
+      router.push("/login")
+    } catch (error) {
+      console.error("Error signing out:", error)
+    }
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-slate-50 to-indigo-50 dark:from-gray-900 dark:via-slate-900 dark:to-blue-900">
-      {/* Mobile Sidebar Overlay */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-      </AnimatePresence>
+  const menuItems = [
+    {
+      title: "Dashboard",
+      icon: LayoutDashboard,
+      href: "/admin",
+      isActive: pathname === "/admin",
+    },
+    {
+      title: "Appointments",
+      icon: Calendar,
+      href: "/admin/appointments",
+      isActive: pathname === "/admin/appointments",
+    },
+    {
+      title: "Patients Data",
+      icon: Users,
+      href: "/admin/patients",
+      isActive: pathname === "/admin/patients",
+    },
+    {
+      title: "Revenue",
+      icon: DollarSign,
+      href: "/admin/revenue",
+      isActive: pathname === "/admin/revenue",
+    },
+  ]
 
-      {/* Sidebar */}
-      <motion.aside
-        initial={false}
-        animate={{
-          width: sidebarCollapsed ? "80px" : "280px",
-          x: sidebarOpen || window.innerWidth >= 1024 ? 0 : -280,
-        }}
-        className="fixed left-0 top-0 h-full bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-r border-white/20 dark:border-gray-700/50 z-50 shadow-2xl"
-      >
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-8">
-            {!sidebarCollapsed && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
-                  <Stethoscope className="h-6 w-6 text-white" />
+  return (
+    <SidebarProvider>
+      <div className="flex min-h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50/30 to-teal-50/20 dark:from-slate-900 dark:via-blue-950/30 dark:to-teal-950/20">
+        {/* Sidebar */}
+        <Sidebar className="border-r border-slate-200/60 dark:border-slate-800/60 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
+          <SidebarHeader className="border-b border-slate-200/60 dark:border-slate-800/60 p-6">
+            <motion.div
+              className="flex items-center space-x-3"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <div className="w-10 h-10 bg-gradient-to-r from-teal-600 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                <Stethoscope className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Doctor Panel</h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400">Medical Dashboard</p>
+              </div>
+            </motion.div>
+          </SidebarHeader>
+
+          <SidebarContent className="p-4">
+            <SidebarMenu>
+              {menuItems.map((item, index) => (
+                <motion.div
+                  key={item.href}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 + 0.2 }}
+                >
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild isActive={item.isActive}>
+                      <Link
+                        href={item.href}
+                        className="flex items-center space-x-3 p-3 rounded-xl transition-all duration-300 hover:bg-gradient-to-r hover:from-teal-50 hover:to-blue-50 dark:hover:from-teal-950/50 dark:hover:to-blue-950/50 group"
+                      >
+                        <item.icon className="h-5 w-5 transition-transform group-hover:scale-110" />
+                        <span className="font-medium">{item.title}</span>
+                        {item.title === "Dashboard" && waitingPatients > 0 && (
+                          <Badge variant="destructive" className="ml-auto animate-pulse">
+                            {waitingPatients}
+                          </Badge>
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </motion.div>
+              ))}
+            </SidebarMenu>
+          </SidebarContent>
+
+          <SidebarFooter className="border-t border-slate-200/60 dark:border-slate-800/60 p-4">
+            <motion.div
+              className="space-y-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+            >
+              {/* Doctor Info */}
+              <div className="flex items-center space-x-3 p-3 bg-gradient-to-r from-teal-50 to-blue-50 dark:from-teal-950/30 dark:to-blue-950/30 rounded-xl border border-teal-100 dark:border-teal-800/30">
+                <Avatar className="h-10 w-10 ring-2 ring-teal-200 dark:ring-teal-700">
+                  <AvatarImage src="/placeholder.svg?height=40&width=40" />
+                  <AvatarFallback className="bg-gradient-to-r from-teal-600 to-blue-600 text-white font-semibold">
+                    {doctorName
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")
+                      .toUpperCase() || "DR"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                    {doctorName || "Loading..."}
+                  </p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">Dermatologist</p>
                 </div>
-                <div>
-                  <h1 className="text-xl font-bold text-gray-900 dark:text-white">Dr. Admin Panel</h1>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Healthcare Management</p>
-                </div>
+                {waitingPatients > 0 && (
+                  <div className="relative">
+                    <Bell className="h-5 w-5 text-amber-500" />
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+                  </div>
+                )}
+              </div>
+
+              {/* Logout Button */}
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                className="w-full justify-start space-x-2 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/20 bg-transparent transition-all duration-300"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Logout</span>
+              </Button>
+            </motion.div>
+          </SidebarFooter>
+        </Sidebar>
+
+        {/* Main Content using SidebarInset for proper full-width layout */}
+        <SidebarInset className="flex flex-col">
+          <header className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-200/60 dark:border-slate-800/60 px-6 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xl">
+            <SidebarTrigger className="-ml-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors" />
+            <div className="flex-1" />
+            {waitingPatients > 0 && (
+              <motion.div
+                className="flex items-center space-x-2 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 px-3 py-1.5 rounded-full border border-amber-200 dark:border-amber-800/30"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Bell className="h-4 w-4 animate-pulse" />
+                <span className="text-sm font-medium">
+                  {waitingPatients} patient{waitingPatients > 1 ? "s" : ""} waiting
+                </span>
               </motion.div>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="hidden lg:flex"
-            >
-              <Menu className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(false)} className="lg:hidden">
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          </header>
 
-          <nav className="space-y-2">
-            {sidebarItems.map((item) => {
-              const isActive = pathname === item.href
-              return (
-                <Link key={item.href} href={item.href}>
-                  <motion.div
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                      isActive
-                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg"
-                        : "text-gray-700 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-800/50"
-                    }`}
-                  >
-                    <item.icon className="h-5 w-5 flex-shrink-0" />
-                    {!sidebarCollapsed && <span className="font-medium truncate">{item.label}</span>}
-                  </motion.div>
-                </Link>
-              )
-            })}
-          </nav>
-        </div>
-
-        {/* Doctor Info & Logout */}
-        <div className="absolute bottom-6 left-6 right-6 space-y-4">
-          {!sidebarCollapsed && (
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700 p-4 rounded-xl">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center">
-                  <span className="text-white font-semibold">DN</span>
-                </div>
-                <div>
-                  <p className="font-semibold text-gray-900 dark:text-white">Dr. Nitin Mishra</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Dermatologist</p>
-                </div>
-              </div>
-            </div>
-          )}
-          <Button
-            variant="ghost"
-            onClick={handleLogout}
-            className="w-full justify-start text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-          >
-            <LogOut className="h-4 w-4 mr-3" />
-            {!sidebarCollapsed && "Logout"}
-          </Button>
-        </div>
-      </motion.aside>
-
-      {/* Main Content */}
-      <div className={`transition-all duration-300`} style={{ marginLeft: sidebarCollapsed ? "80px" : "280px" }}>
-        {/* Header */}
-        <header className="sticky top-0 z-30 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-white/20 dark:border-gray-700/50 shadow-sm">
-          <div className="flex items-center justify-between px-6 py-4">
-            <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="sm" onClick={() => setSidebarOpen(true)} className="lg:hidden">
-                <Menu className="h-5 w-5" />
-              </Button>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {sidebarItems.find((item) => item.href === pathname)?.label || "Dashboard"}
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Dr. Nitin Mishra's Practice Management</p>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="sm" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </Button>
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">DN</span>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* Page Content */}
-        <main className="p-6">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-            {children}
-          </motion.div>
-        </main>
+          <main className="flex-1 p-6 overflow-auto">{children}</main>
+        </SidebarInset>
       </div>
-    </div>
+    </SidebarProvider>
   )
 }

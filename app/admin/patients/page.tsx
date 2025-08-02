@@ -5,35 +5,34 @@ import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useAuthState } from "react-firebase-hooks/auth"
-import { collection, query, getDocs, orderBy, where } from "firebase/firestore"
-import { ref, listAll, getDownloadURL } from "firebase/storage"
-import { auth, db, storage } from "@/lib/firebase"
-import { Search, Users, Eye, Calendar, Phone, Mail, Activity, FileText, ImageIcon, Download } from "lucide-react"
+import { collection, query, getDocs, orderBy, onSnapshot } from "firebase/firestore"
+import { auth, db } from "@/lib/firebase"
+import {
+  Users,
+  Search,
+  Phone,
+  FileText,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Printer,
+  Loader2,
+  User,
+} from "lucide-react"
 
 interface Patient {
   id: string
-  name: string
-  email: string
-  phone: string
-  age: string
-  gender: string
-  location?: string
-  totalConsultations: number
-  lastConsultation: string
-  medicalHistory: string[]
-  uploadedFiles: string[]
-  status: "active" | "inactive"
+  patientName: string
+  contactNumber: string
+  chiefComplaint: string
+  email?: string
+  age?: number
+  gender?: string
+  createdAt: Date
 }
 
-interface PatientDetails {
-  appointments: any[]
-  chatHistory: any[]
-  uploadedMedia: string[]
-}
+const ITEMS_PER_PAGE = 10
 
 export default function PatientsPage() {
   const [user] = useAuthState(auth)
@@ -41,9 +40,7 @@ export default function PatientsPage() {
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
-  const [patientDetails, setPatientDetails] = useState<PatientDetails | null>(null)
-  const [detailsLoading, setDetailsLoading] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
 
   useEffect(() => {
     if (user) {
@@ -52,55 +49,97 @@ export default function PatientsPage() {
   }, [user])
 
   useEffect(() => {
-    filterPatients()
-  }, [patients, searchTerm])
+  const unsubscribe = onSnapshot(
+    query(collection(db, "appointments"), orderBy("createdAt", "desc")),
+    (snapshot) => {
+      const map = new Map<string, Patient>()
+
+      snapshot.docs.forEach((doc) => {
+        const data = doc.data()
+        const email = data.email || ""
+        const phone = data.phone || ""
+        const key = email || phone || doc.id
+
+        if (!map.has(key)) {
+          map.set(key, {
+            id: doc.id,
+            patientName: `${data.firstName || ""} ${data.lastName || ""}`.trim() || "Unknown",
+            contactNumber: data.phone || "N/A",
+            chiefComplaint: data.symptoms || "Not specified",
+            email: data.email || "",
+            age: data.age,
+            gender: data.gender,
+            createdAt: data.createdAt?.toDate() || new Date(),
+          })
+        }
+      })
+
+      setPatients(Array.from(map.values()))
+      setLoading(false)
+    },
+    (error) => {
+      console.error("Error in real-time listener:", error)
+      setLoading(false)
+    }
+  )
+
+  return () => unsubscribe()
+}, [])
+
+
 
   const fetchPatients = async () => {
     try {
       setLoading(true)
 
-      // Get all appointments to extract unique patients
+      // Fetch from chats collection (patient conversations)
+      const chatsQuery = query(collection(db, "chats"), orderBy("createdAt", "desc"))
+      const chatsSnapshot = await getDocs(chatsQuery)
+
+      // Fetch from appointments collection
       const appointmentsQuery = query(collection(db, "appointments"), orderBy("createdAt", "desc"))
       const appointmentsSnapshot = await getDocs(appointmentsQuery)
 
-      // Group appointments by patient email
-      const patientMap = new Map<string, any>()
+      const patientsMap = new Map<string, Patient>()
 
-      appointmentsSnapshot.docs.forEach((doc) => {
+      // Process chats data
+      chatsSnapshot.docs.forEach((doc) => {
         const data = doc.data()
-        const email = data.patientEmail
-
-        if (!patientMap.has(email)) {
-          patientMap.set(email, {
-            id: email,
-            name: data.patientName || "Unknown",
+        const email = data.patientEmail || data.userEmail
+        if (email && !patientsMap.has(email)) {
+          patientsMap.set(email, {
+            id: doc.id,
+            patientName: data.patientName || data.userName || "Unknown Patient",
+            contactNumber: data.phoneNumber || data.contactNumber || "N/A",
+            chiefComplaint: data.chiefComplaint || data.message || "General consultation",
             email: email,
-            phone: data.patientPhone || "N/A",
-            age: data.age || "N/A",
-            gender: data.gender || "N/A",
-            location: data.location || "N/A",
-            totalConsultations: 0,
-            lastConsultation: data.createdAt?.toDate?.()?.toISOString().slice(0, 10) || "N/A",
-            medicalHistory: [],
-            uploadedFiles: [],
-            status: "active" as const,
-            appointments: [],
+            createdAt: data.createdAt?.toDate() || new Date(),
           })
-        }
-
-        const patient = patientMap.get(email)
-        patient.totalConsultations += 1
-        patient.appointments.push(data)
-
-        // Update last consultation if this one is more recent
-        const currentDate = data.createdAt?.toDate?.()
-        const lastDate = new Date(patient.lastConsultation)
-        if (currentDate && currentDate > lastDate) {
-          patient.lastConsultation = currentDate.toISOString().slice(0, 10)
         }
       })
 
-      const patientsData = Array.from(patientMap.values())
+      // Process appointments data
+      appointmentsSnapshot.docs.forEach((doc) => {
+        const data = doc.data()
+        const email = data.patientEmail || data.email
+        const phone = data.phoneNumber || data.contactNumber
+        const key = email || phone || doc.id
+
+        if (!patientsMap.has(key)) {
+          patientsMap.set(key, {
+            id: doc.id,
+            patientName: data.patientName || "Unknown Patient",
+            contactNumber: phone || "N/A",
+            chiefComplaint: data.chiefComplaint || data.reason || "Appointment booking",
+            email: email,
+            age: data.age,
+            gender: data.gender,
+            createdAt: data.createdAt?.toDate() || new Date(),
+          })
+        }
+      })
+
+      const patientsData = Array.from(patientsMap.values())
       setPatients(patientsData)
     } catch (error) {
       console.error("Error fetching patients:", error)
@@ -109,341 +148,197 @@ export default function PatientsPage() {
     }
   }
 
-  const filterPatients = () => {
-    let filtered = patients
 
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (patient) =>
-          patient.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          patient.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          patient.phone?.includes(searchTerm),
-      )
-    }
 
-    setFilteredPatients(filtered)
-  }
+  // Pagination logic
+  const totalPages = Math.ceil(filteredPatients.length / ITEMS_PER_PAGE)
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+  const endIndex = startIndex + ITEMS_PER_PAGE
+  const currentPatients = filteredPatients.slice(startIndex, endIndex)
 
-  const fetchPatientDetails = async (patient: Patient) => {
-    try {
-      setDetailsLoading(true)
-      setSelectedPatient(patient)
-
-      // Get patient's appointments
-      const appointmentsQuery = query(
-        collection(db, "appointments"),
-        where("patientEmail", "==", patient.email),
-        orderBy("createdAt", "desc"),
-      )
-      const appointmentsSnapshot = await getDocs(appointmentsQuery)
-      const appointments = appointmentsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-
-      // Get patient's chat history
-      const chatsQuery = query(
-        collection(db, "chats"),
-        where("patientEmail", "==", patient.email),
-        orderBy("createdAt", "desc"),
-      )
-      const chatsSnapshot = await getDocs(chatsQuery)
-      const chatHistory = chatsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-
-      // Get uploaded media from Firebase Storage
-      let uploadedMedia: string[] = []
-      try {
-        const mediaRef = ref(storage, `uploads/${patient.email}`)
-        const mediaList = await listAll(mediaRef)
-        uploadedMedia = await Promise.all(
-          mediaList.items.map(async (item) => {
-            const url = await getDownloadURL(item)
-            return url
-          }),
-        )
-      } catch (error) {
-        console.log("No uploaded media found for patient")
-      }
-
-      setPatientDetails({
-        appointments,
-        chatHistory,
-        uploadedMedia,
-      })
-    } catch (error) {
-      console.error("Error fetching patient details:", error)
-    } finally {
-      setDetailsLoading(false)
-    }
+  const goToPage = (page: number) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)))
   }
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0 shadow-xl">
-          <CardContent className="p-6">
-            <div className="animate-pulse space-y-4">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="h-16 bg-gray-200 rounded"></div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin text-teal-600" />
+          <span className="text-slate-600 dark:text-slate-400">Loading patients...</span>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      {/* Header Actions */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+      >
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Patients</h1>
+          <p className="text-slate-600 dark:text-slate-400">View and manage patient information</p>
+        </div>
+      </motion.div>
+
+      {/* Search Bar */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="flex flex-col sm:flex-row gap-4"
+      >
+        <div className="flex-1 max-w-md relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
-            placeholder="Search patients..."
+            placeholder="Search by name, phone, or complaint..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm"
+            className="pl-10 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-slate-200/60 dark:border-slate-700/60"
           />
         </div>
-      </div>
+      </motion.div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0 shadow-xl">
-          <CardContent className="p-4">
+      {/* Stats Card */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+        <Card className="bg-gradient-to-r from-teal-50 to-blue-50 dark:from-teal-950/20 dark:to-blue-950/20 border-0 shadow-lg">
+          <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Patients</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{patients.length}</p>
-              </div>
-              <Users className="h-8 w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0 shadow-xl">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Active</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {patients.filter((p) => p.status === "active").length}
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Total Patients</p>
+                <p className="text-3xl font-bold text-slate-900 dark:text-white">{filteredPatients.length}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Showing {currentPatients.length} of {filteredPatients.length}
                 </p>
               </div>
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <Users className="h-12 w-12 text-teal-600" />
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0 shadow-xl">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">New This Month</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {
-                    patients.filter((p) => {
-                      const lastConsultation = new Date(p.lastConsultation)
-                      const thisMonth = new Date()
-                      thisMonth.setDate(1)
-                      return lastConsultation >= thisMonth
-                    }).length
-                  }
-                </p>
-              </div>
-              <Activity className="h-8 w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0 shadow-xl">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Consultations</p>
-                <p className="text-2xl font-bold text-purple-600">
-                  {patients.reduce((sum, p) => sum + p.totalConsultations, 0)}
-                </p>
-              </div>
-              <Calendar className="h-8 w-8 text-purple-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      </motion.div>
 
       {/* Patients List */}
-      <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0 shadow-xl">
-        <CardHeader>
-          <CardTitle>Patients Directory</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {filteredPatients.map((patient, index) => (
-              <motion.div
-                key={patient.id ? patient.id : `patient-fallback-${index}`}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <div className="flex items-center space-x-4">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={`/placeholder.svg?height=48&width=48`} />
-                    <AvatarFallback className="bg-gradient-to-r from-purple-600 to-pink-600 text-white">
-                      {patient.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2">
-                      <h3 className="font-semibold text-gray-900 dark:text-white">{patient.name}</h3>
-                      <Badge variant={patient.status === "active" ? "default" : "secondary"}>{patient.status}</Badge>
-                    </div>
-                    <div className="flex items-center space-x-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      <span>
-                        {patient.age} years, {patient.gender}
-                      </span>
-                      <span className="flex items-center">
-                        <Activity className="h-3 w-3 mr-1" />
-                        {patient.totalConsultations} consultations
-                      </span>
-                      <span className="flex items-center">
-                        <Calendar className="h-3 w-3 mr-1" />
-                        Last: {typeof patient.lastConsultation === "string" ? patient.lastConsultation : (patient.lastConsultation?.toISOString?.().slice(0, 10) || "N/A")}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-4 mt-1 text-xs text-gray-400">
-                      <span className="flex items-center">
-                        <Mail className="h-3 w-3 mr-1" />
-                        {patient.email}
-                      </span>
-                      <span className="flex items-center">
-                        <Phone className="h-3 w-3 mr-1" />
-                        {patient.phone}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="ghost" size="sm" onClick={() => fetchPatientDetails(patient)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Patient Details - {selectedPatient?.name}</DialogTitle>
-                    </DialogHeader>
-                    {detailsLoading ? (
-                      <div className="flex items-center justify-center p-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                      </div>
-                    ) : (
-                      patientDetails && (
-                        <div className="space-y-6">
-                          {/* Patient Info */}
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Email</p>
-                              <p className="font-semibold">{selectedPatient?.email}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Phone</p>
-                              <p className="font-semibold">{selectedPatient?.phone}</p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Age & Gender</p>
-                              <p className="font-semibold">
-                                {selectedPatient?.age} years, {selectedPatient?.gender}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                                Total Consultations
-                              </p>
-                              <p className="font-semibold">{selectedPatient?.totalConsultations}</p>
-                            </div>
-                          </div>
-
-                          {/* Appointment History */}
-                          <div>
-                            <h4 className="font-semibold mb-3 flex items-center">
-                              <Calendar className="h-4 w-4 mr-2" />
-                              Appointment History
-                            </h4>
-                            <div className="space-y-2 max-h-40 overflow-y-auto">
-                              {patientDetails.appointments.map((appointment) => (
-                                <div key={appointment.id} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                  <div className="flex justify-between items-start">
-                                    <div>
-                                      <p className="font-medium">{appointment.symptoms}</p>
-                                      <p className="text-sm text-gray-500">
-                                        {appointment.createdAt?.toDate?.()?.toISOString().slice(0, 10)} -{" "}
-                                        {appointment.urgency} urgency
-                                      </p>
-                                    </div>
-                                    <Badge variant={appointment.status === "completed" ? "default" : "secondary"}>
-                                      {appointment.status}
-                                    </Badge>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Uploaded Media */}
-                          {patientDetails.uploadedMedia.length > 0 && (
-                            <div>
-                              <h4 className="font-semibold mb-3 flex items-center">
-                                <ImageIcon className="h-4 w-4 mr-2" />
-                                Uploaded Media
-                              </h4>
-                              <div className="grid grid-cols-3 gap-4">
-                                {patientDetails.uploadedMedia.map((url) => (
-                                  <div key={url} className="relative">
-                                    <img
-                                      src={url || "/placeholder.svg"}
-                                      alt={`Upload`}
-                                      className="w-full h-24 object-cover rounded-lg"
-                                    />
-                                    <Button
-                                      size="sm"
-                                      variant="secondary"
-                                      className="absolute top-2 right-2"
-                                      onClick={() => window.open(url, "_blank")}
-                                    >
-                                      <Download className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                ))}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}>
+        <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-slate-200/60 dark:border-slate-700/60 shadow-xl">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Users className="h-5 w-5 mr-2 text-teal-600" />
+              Patient Records
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {currentPatients.length > 0 ? (
+              <div className="space-y-4">
+                {/* Desktop Table View */}
+                <div className="hidden lg:block overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-700">
+                        <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-white">
+                          Patient Name
+                        </th>
+                        <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-white">Contact</th>
+                        <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-white">
+                          Registration
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {currentPatients.map((patient, index) => (
+                        <motion.tr
+                          key={patient.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                        >
+                          <td className="py-4 px-4">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-10 h-10 bg-gradient-to-r from-teal-500 to-blue-500 rounded-full flex items-center justify-center">
+                                <User className="h-5 w-5 text-white" />
+                              </div>
+                              <div>
+                                <p className="font-semibold text-slate-900 dark:text-white">{patient.patientName}</p>
+                                {patient.email && (
+                                  <p className="text-sm text-slate-500 dark:text-slate-400">{patient.email}</p>
+                                )}
                               </div>
                             </div>
-                          )}
-
-                          {/* Chat Summary */}
-                          <div>
-                            <h4 className="font-semibold mb-3 flex items-center">
-                              <FileText className="h-4 w-4 mr-2" />
-                              Recent Chat Messages
-                            </h4>
-                            <div className="space-y-2 max-h-40 overflow-y-auto">
-                              {patientDetails.chatHistory.slice(0, 5).map((chat) => (
-                                <div key={chat.id} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                  <p className="text-sm">{chat.lastMessage || "Chat session"}</p>
-                                  <p className="text-xs text-gray-500">
-                                    {chat.createdAt?.toDate?.()?.toISOString().slice(0, 10)}
-                                  </p>
-                                </div>
-                              ))}
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="flex items-center text-slate-600 dark:text-slate-400">
+                              <Phone className="h-4 w-4 mr-2" />
+                              {patient.contactNumber}
                             </div>
-                          </div>
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="flex items-start">
+                              <FileText className="h-4 w-4 mr-2 mt-0.5 text-slate-400" />
+                              <span className="text-slate-600 dark:text-slate-400 line-clamp-2">
+                                {patient.chiefComplaint}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4">
+                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                              {patient.createdAt.toLocaleDateString()}
+                            </p>
+                          </td>
+                        </motion.tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="lg:hidden space-y-4">
+                  {currentPatients.map((patient, index) => (
+                    <motion.div
+                      key={patient.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="p-4 rounded-xl bg-slate-50 dark:bg-slate-700/50 border border-slate-200/60 dark:border-slate-600/60"
+                    >
+                      <div className="flex items-start space-x-3">
+                        <div className="w-12 h-12 bg-gradient-to-r from-teal-500 to-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                          <User className="h-6 w-6 text-white" />
                         </div>
-                      )
-                    )}
-                  </DialogContent>
-                </Dialog>
-              </motion.div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-slate-900 dark:text-white">{patient.patientName}</h3>
+                          <div className="flex items-center text-sm text-slate-600 dark:text-slate-400 mt-1">
+                            <Phone className="h-3 w-3 mr-1" />
+                            {patient.contactNumber}
+                          </div>
+                          <div className="flex items-start text-sm text-slate-600 dark:text-slate-400 mt-2">
+                            <FileText className="h-3 w-3 mr-1 mt-0.5 flex-shrink-0" />
+                            <span className="line-clamp-2">{patient.chiefComplaint}</span>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                            Registered: {patient.createdAt.toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Users className="h-16 w-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">No patients found</h3>
+                <p className="text-slate-500 dark:text-slate-400">
+                  {searchTerm ? "Try adjusting your search terms" : "No patient records available"}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   )
 }

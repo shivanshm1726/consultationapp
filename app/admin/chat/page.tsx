@@ -33,13 +33,13 @@ import PatientList from "../components/PatientList"
 type MessageType = {
   id: string
   text?: string
-  senderEmail: string
-  timestamp: any
+  senderEmail: string // Required
+  timestamp: any // Firestore Timestamp or Date
   mediaUrl?: string
   mediaType?: "image" | "video" | "file"
   fileName?: string
-  uid?: string
-  photoURL?: string | null
+  uid?: string // Optional: for sender's UID (from auth)
+  photoURL?: string | null // Optional: for sender's photo (from auth) - Allow null
 }
 
 function LiveChatContent() {
@@ -266,6 +266,11 @@ function LiveChatContent() {
               )
               return () => unsubMessages()
             } else {
+              toast({
+                title: "Error",
+                description: "No active chat found for this patient.",
+                variant: "destructive",
+              })
               router.push("/admin/chat")
             }
           }

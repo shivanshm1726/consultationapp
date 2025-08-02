@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useDarkMode } from "@/contexts/dark-mode-context"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -21,7 +22,7 @@ import {
 } from "lucide-react"
 
 export default function WhyChooseUs() {
-  const [darkMode, setDarkMode] = useState(false)
+  const { darkMode, toggleDarkMode } = useDarkMode()
 
   const reasons = [
     {
@@ -123,15 +124,13 @@ export default function WhyChooseUs() {
 
   return (
     <div
-      className={`min-h-screen transition-colors duration-300 ${
-        darkMode ? "dark bg-slate-900" : "bg-gradient-to-br from-slate-50 via-white to-indigo-50"
-      }`}
+      className={`min-h-screen transition-colors duration-300 ${darkMode ? "dark bg-slate-900" : "bg-gradient-to-br from-slate-50 via-white to-indigo-50"
+        }`}
     >
       {/* Header */}
       <header
-        className={`sticky top-0 z-50 backdrop-blur-md border-b transition-all duration-300 ${
-          darkMode ? "bg-slate-900/80 border-slate-700" : "bg-white/80 border-slate-200"
-        }`}
+        className={`sticky top-0 z-50 backdrop-blur-md border-b transition-all duration-300 ${darkMode ? "bg-slate-900/80 border-slate-700" : "bg-white/80 border-slate-200"
+          }`}
       >
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -154,8 +153,14 @@ export default function WhyChooseUs() {
             </div>
 
             <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="sm" onClick={() => setDarkMode(!darkMode)} className="p-2">
-                {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleDarkMode}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </Button>
               <Link href="/appointment">
                 <Button className="bg-gradient-to-r from-indigo-600 to-teal-600 hover:from-indigo-700 hover:to-teal-700">
@@ -183,9 +188,8 @@ export default function WhyChooseUs() {
             {stats.map((stat, index) => (
               <Card
                 key={index}
-                className={`${
-                  darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
-                } border-0 shadow-lg`}
+                className={`${darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
+                  } border-0 shadow-lg`}
               >
                 <CardContent className="p-6 text-center">
                   <div className={`text-3xl font-bold mb-2 ${darkMode ? "text-white" : "text-slate-900"}`}>
@@ -205,9 +209,8 @@ export default function WhyChooseUs() {
             return (
               <Card
                 key={index}
-                className={`group hover:shadow-xl transition-all duration-300 border-0 ${
-                  darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
-                }`}
+                className={`group hover:shadow-xl transition-all duration-300 border-0 ${darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
+                  }`}
               >
                 <CardContent className="p-8">
                   <div className="flex items-start space-x-4">
@@ -239,9 +242,8 @@ export default function WhyChooseUs() {
 
         {/* Doctor Profile Section */}
         <Card
-          className={`mb-16 ${
-            darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
-          } border-0 shadow-xl`}
+          className={`mb-16 ${darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
+            } border-0 shadow-xl`}
         >
           <CardContent className="p-8">
             <div className="grid md:grid-cols-2 gap-8 items-center">
@@ -273,7 +275,9 @@ export default function WhyChooseUs() {
                     </p>
                   </div>
                   <div>
-                    <h3 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>Contact</h3>
+                    <h3 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>
+                      Contact
+                    </h3>
                     <p className={`${darkMode ? "text-slate-300" : "text-slate-600"}`}>
                       📞 9258924611 | ✉️ dermanitin@gmail.com
                     </p>
@@ -282,9 +286,12 @@ export default function WhyChooseUs() {
               </div>
               <div className="text-center">
                 <img
-                  src="/placeholder.svg?height=300&width=300"
-                  alt="Dr. Nitin Mishra"
+                  src="/doctor.jpg" // Updated with actual image path
+                  alt="Portrait of Dr. Nitin Mishra, Dermatologist"
                   className="w-64 h-64 rounded-2xl mx-auto shadow-lg"
+                  onError={(e) => {
+                    e.currentTarget.src = "/placeholder.svg?height=300&width=300" // Fallback image
+                  }}
                 />
               </div>
             </div>
@@ -294,9 +301,8 @@ export default function WhyChooseUs() {
         {/* CTA Section */}
         <div className="text-center">
           <Card
-            className={`max-w-2xl mx-auto ${
-              darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
-            } border-0 shadow-xl`}
+            className={`max-w-2xl mx-auto ${darkMode ? "bg-slate-800/50 backdrop-blur-sm" : "bg-white/70 backdrop-blur-sm"
+              } border-0 shadow-xl`}
           >
             <CardContent className="p-8">
               <h2 className={`text-2xl font-bold mb-4 ${darkMode ? "text-white" : "text-slate-900"}`}>

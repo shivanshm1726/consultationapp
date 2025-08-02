@@ -1,9 +1,12 @@
 "use client"
 import Link from "next/link"
+import { useDarkMode } from "@/contexts/dark-mode-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
+  Sun,
+  Moon,
   Clock,
   MapPin,
   Phone,
@@ -20,7 +23,7 @@ import {
 import { useTheme } from "next-themes"
 
 export default function DoctorProfile() {
-  const { theme, setTheme } = useTheme()
+  const { darkMode, toggleDarkMode } = useDarkMode()
 
   const doctor = {
     name: "Dr. Nitin Mishra",
@@ -95,9 +98,20 @@ export default function DoctorProfile() {
             </div>
 
             <div className="flex items-center space-x-4">
-              <Button variant="outline" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
-                {theme === "light" ? "Dark" : "Light"} Mode
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleDarkMode}
+                className="hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {darkMode ? (
+                  <Sun className="h-5 w-5" />
+                ) : (
+                  <Moon className="h-5 w-5" />
+                )}
               </Button>
+
               <Link href="/login">
                 <Button variant="outline">Login</Button>
               </Link>

@@ -1,4 +1,5 @@
 "use client"
+import { useRouter } from "next/navigation"
 import { Search } from "lucide-react"
 import { useEffect, useState, useRef } from "react"
 import { db } from "@/lib/firebase"
@@ -31,6 +32,7 @@ type Appointment = {
 }
 
 export default function ReceptionOverview() {
+  const router = useRouter()
   const { active, toggleStatus } = useAppointmentStatus()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [sortDesc, setSortDesc] = useState(true)
@@ -51,6 +53,16 @@ export default function ReceptionOverview() {
   const isFirestoreTimestamp = (value: any): boolean => {
     return value && typeof value === "object" && "seconds" in value && "nanoseconds" in value
   }
+
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+      // This will do a full page reload to /login
+      window.location.href = "/login";
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  };
 
   // Convert date/timestamp safely with better error handling
   const getSafeDate = (value: string | Timestamp | null | undefined): Date => {
@@ -215,7 +227,7 @@ export default function ReceptionOverview() {
         <div className="flex items-center justify-between w-full">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Reception Dashboard</h1>
           <button
-            onClick={() => logoutUser()}
+            onClick={handleLogout}
             className="flex items-center gap-2 px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 text-sm"
           >
             <LogOut className="w-4 h-4" />
@@ -257,14 +269,12 @@ export default function ReceptionOverview() {
         <Switch
           checked={active}
           onChange={toggleStatus}
-          className={`${
-            active ? "bg-green-500" : "bg-red-500"
-          } relative inline-flex h-6 w-11 items-center rounded-full transition`}
+          className={`${active ? "bg-green-500" : "bg-red-500"
+            } relative inline-flex h-6 w-11 items-center rounded-full transition`}
         >
           <span
-            className={`${
-              active ? "translate-x-6" : "translate-x-1"
-            } inline-block h-4 w-4 transform rounded-full bg-white transition`}
+            className={`${active ? "translate-x-6" : "translate-x-1"
+              } inline-block h-4 w-4 transform rounded-full bg-white transition`}
           />
         </Switch>
       </div>
@@ -379,7 +389,7 @@ export default function ReceptionOverview() {
                 urgency: appointment.urgency ?? "low",
                 symptoms: appointment.symptoms && appointment.symptoms.trim() !== "" ? appointment.symptoms : "N/A",
               }}
-              onDelete={() => {}}
+              onDelete={() => { }}
             />
           ))
         )}
