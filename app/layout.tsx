@@ -39,16 +39,16 @@ export default function RootLayout({
       </head>
       <body>
         <AuthProvider>
-        <DarkModeProvider>
-          <DarkModeInitializer /> {/* Add this line */}
-          <ThemeProvider 
-          attribute="class" 
-          defaultTheme="system" 
-          enableSystem
-          disableTransitionOnChange>
-          {children}
-        </ThemeProvider>
-        </DarkModeProvider>
+          <DarkModeProvider>
+            <DarkModeInitializer /> {/* Add this line */}
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange>
+              {children}
+            </ThemeProvider>
+          </DarkModeProvider>
         </AuthProvider>
       </body>
     </html>

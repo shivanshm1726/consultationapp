@@ -65,7 +65,9 @@ export default function DoctorDashboard() {
   );
 
   useEffect(() => {
-    if (!user) return;
+    if (user) {
+      fetchDashboardData();
+    }
 
     // Listen to real-time updates from "appointments"
     const unsubscribe = onSnapshot(
@@ -185,7 +187,7 @@ export default function DoctorDashboard() {
       color: "from-teal-500 to-teal-600",
       hoverColor: "hover:from-teal-600 hover:to-teal-700",
       bgColor: "bg-teal-50 dark:bg-teal-950/20",
-      href: "/doctor/chats",
+      href: "/admin/chat",
       count: "Available",
     },
     {
@@ -195,7 +197,7 @@ export default function DoctorDashboard() {
       color: "from-blue-500 to-blue-600",
       hoverColor: "hover:from-blue-600 hover:to-blue-700",
       bgColor: "bg-blue-50 dark:bg-blue-950/20",
-      href: "/doctor/calls",
+      href: "/admin/calls",
       count: "Available",
     },
   ];
@@ -400,11 +402,14 @@ export default function DoctorDashboard() {
                       return;
                     }
 
-                    // Step 2: Update the role in that document
+                    // Step 2: Update the role and set forceLogout flag
                     const userDoc = querySnapshot.docs[0];
-                    await updateDoc(userDoc.ref, { role });
+                    await updateDoc(userDoc.ref, { 
+                      role,
+                      forceLogout: true // Set flag to force logout
+                    });
 
-                    alert(`Role updated to '${role}' for ${email}`);
+                    alert(`Role updated to '${role}' for ${email}. User will be logged out.`);
                     form.reset();
                   } catch (err) {
                     console.error(err);

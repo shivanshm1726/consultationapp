@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar } from "@/components/ui/calendar"
 import { useAppointmentStatus } from "app/reception/hooks/useAppointmentStatus"
+import { useAuth } from "@/contexts/auth-context"
 import {
   ArrowLeft,
   CalendarIcon,
@@ -28,13 +29,14 @@ import {
 
 export default function AppointmentBooking() {
   const { active, loading: statusLoading } = useAppointmentStatus()
+  const { user } = useAuth()
+  const patientId = typeof window !== "undefined" ? localStorage.getItem("selectedPatientId") : null
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
   const [selectedTime, setSelectedTime] = useState("")
   const [selectedClinic, setSelectedClinic] = useState("")
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
-    email: "",
     phone: "",
     age: "",
     gender: "",
@@ -87,7 +89,8 @@ useEffect(() => {
     const q = query(
       appointmentsRef,
       where("clinicId", "==", selectedClinic),
-      where("date", "==", formattedDate)
+      where("date", "==", formattedDate),
+      where("patientId", "==", user?.uid)
     )
 
     const snapshot = await getDocs(q)
@@ -135,7 +138,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   firstName: formData.firstName,
   lastName: formData.lastName,
   phone: formData.phone,
-  email: formData.email,
+  patientId: user?.uid,
   clinic: selectedClinicInfo?.name,
   clinicId: selectedClinicInfo?.id,
   date: selectedDate?.toISOString().split("T")[0],
@@ -277,19 +280,6 @@ const handleSubmit = async (e: React.FormEvent) => {
                   </div>
 
                   <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="email" className="text-blue-900 dark:text-slate-200">
-                        Email Address *
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => handleInputChange("email", e.target.value)}
-                        required
-                        className="bg-white/50 dark:bg-slate-700 dark:text-slate-50"
-                      />
-                    </div>
                     <div>
                       <Label htmlFor="phone" className="text-blue-900 dark:text-slate-200">
                         Phone Number *

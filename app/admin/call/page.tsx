@@ -7,26 +7,25 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, Users, Clock, ArrowLeft, Loader2 } from "lucide-react"
-import { auth } from "@/lib/firebase"
+import { auth, db } from "@/lib/firebase"
+import { doc, updateDoc, addDoc, collection, deleteDoc, serverTimestamp, onSnapshot } from "firebase/firestore"
 
 const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID!
 const tokenBaseURL = process.env.NEXT_PUBLIC_TOKEN_BASE_URL!
-const doctorEmail = process.env.NEXT_PUBLIC_DOCTOR_EMAIL!
 
-const CallPage = () => {
+const AdminCallPage = () => {
   const [user] = useAuthState(auth)
-  const defaultRole = user?.email === doctorEmail ? "doctor" : "patient"
-
   const searchParams = useSearchParams()
   const channelName = searchParams.get("channel")
-  const callType = searchParams.get("type") || "video" // audio or video
+  const callType = searchParams.get("type") || "video"
+  const callId = searchParams.get("callId")
   const router = useRouter()
 
   const localVideoRef = useRef<HTMLDivElement>(null)
   const remoteVideoRef = useRef<HTMLDivElement>(null)
-
   const clientRef = useRef<any>(null)
   const localTracksRef = useRef<any>(null)
+  const callStartTimeRef = useRef<Date | null>(null)
 
   const [AgoraRTC, setAgoraRTC] = useState<any>(null)
   const [joined, setJoined] = useState(false)
@@ -36,16 +35,22 @@ const CallPage = () => {
   const [mutedVideo, setMutedVideo] = useState(false)
   const [callDuration, setCallDuration] = useState(0)
   const [connectionStatus, setConnectionStatus] = useState("Ready to connect")
+  const [callData, setCallData] = useState<any>(null)
 
-  // Add this after the state declarations
+  // Listen to call data changes
   useEffect(() => {
-    console.log("Environment check:")
-    console.log("AGORA_APP_ID:", appId ? "✓ Set" : "✗ Missing")
-    console.log("TOKEN_BASE_URL:", tokenBaseURL ? "✓ Set" : "✗ Missing")
-    console.log("DOCTOR_EMAIL:", doctorEmail ? "✓ Set" : "✗ Missing")
-  }, [])
+    if (!callId) return
 
-  // Load AgoraRTC dynamically on client only
+    const unsubscribe = onSnapshot(doc(db, "activeCalls", callId), (doc) => {
+      if (doc.exists()) {
+        setCallData(doc.data())
+      }
+    })
+
+    return () => unsubscribe()
+  }, [callId])
+
+  // Load AgoraRTC dynamically
   useEffect(() => {
     ;(async () => {
       try {
@@ -62,9 +67,11 @@ const CallPage = () => {
   // Call duration timer
   useEffect(() => {
     let interval: NodeJS.Timeout
-    if (joined) {
+    if (joined && callStartTimeRef.current) {
       interval = setInterval(() => {
-        setCallDuration((prev) => prev + 1)
+        const now = new Date()
+        const duration = Math.floor((now.getTime() - callStartTimeRef.current!.getTime()) / 1000)
+        setCallDuration(duration)
       }, 1000)
     }
     return () => clearInterval(interval)
@@ -83,25 +90,20 @@ const CallPage = () => {
     setConnectionStatus("Joining call...")
 
     try {
-      const uid = user.email || String(Math.floor(Math.random() * 100000))
+      const uid = `doctor_${user.uid}`
       let token = null
 
-      // Try to fetch token from your Firebase function
+      // Try to fetch token
       try {
         if (tokenBaseURL) {
-          const res = await fetch(`${tokenBaseURL}?channel=${channelName}&uid=${uid}&role=${defaultRole}`)
+          const res = await fetch(`${tokenBaseURL}?channelName=${channelName}&uid=${uid}&role=doctor`)
           if (res.ok) {
             const data = await res.json()
-            token = data.token
-          } else {
-            console.warn("Token fetch failed, using null token for testing")
+            token = data?.token || null
           }
-        } else {
-          console.warn("tokenBaseURL not configured, using null token for testing")
         }
       } catch (tokenError) {
-        console.warn("Token generation failed:", tokenError)
-        console.warn("Using null token for testing - this may not work in production")
+        console.warn("Token generation failed, using null token for testing")
       }
 
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
@@ -127,37 +129,35 @@ const CallPage = () => {
         setRemoteUsers((prev) => prev.filter((u) => u.uid !== remoteUser.uid))
       })
 
-      client.on("connection-state-change", (curState: string) => {
-        setConnectionStatus(curState === "CONNECTED" ? "Connected" : "Connecting...")
-      })
-
-      // Join with token (null token works for testing but not production)
       await client.join(appId, channelName, token, uid)
 
       // Create tracks based on call type
       if (callType === "video") {
         const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks()
         localTracksRef.current = [audioTrack, videoTrack]
-
         videoTrack.play(localVideoRef.current!)
         await client.publish([audioTrack, videoTrack])
       } else {
-        // Audio only
         const audioTrack = await AgoraRTC.createMicrophoneAudioTrack()
         localTracksRef.current = [audioTrack]
         await client.publish([audioTrack])
       }
 
       setJoined(true)
+      callStartTimeRef.current = new Date()
       setConnectionStatus("Connected")
+
+      // Update call status in Firebase
+      if (callId) {
+        await updateDoc(doc(db, "activeCalls", callId), {
+          status: "connected",
+          doctorJoinedAt: serverTimestamp(),
+        })
+      }
     } catch (error) {
       console.error("Failed to join call:", error)
       setConnectionStatus("Connection failed")
-
-      // Show user-friendly error message
-      alert(
-        `Failed to join call: ${"Unknown error"}. Please check your internet connection and try again.`,
-      )
+      alert("Failed to join call. Please try again.")
     } finally {
       setConnecting(false)
     }
@@ -167,13 +167,40 @@ const CallPage = () => {
     if (clientRef.current && localTracksRef.current) {
       localTracksRef.current.forEach((track: any) => track.close())
       await clientRef.current.leave()
+
+      // Calculate call duration
+      const duration = callStartTimeRef.current
+        ? Math.floor((new Date().getTime() - callStartTimeRef.current.getTime()) / 1000)
+        : 0
+
+      // Move to call logs and remove from active calls
+      if (callId && callData) {
+        try {
+          // Add to call logs
+          await addDoc(collection(db, "callLogs"), {
+            patientName: callData.patientName || "Patient",
+            patientEmail: callData.patientEmail || "patient@example.com",
+            callType,
+            duration,
+            startTime: callStartTimeRef.current ? new Date(callStartTimeRef.current) : new Date(),
+            endTime: serverTimestamp(),
+            status: "completed",
+          })
+
+          // Remove from active calls
+          await deleteDoc(doc(db, "activeCalls", callId))
+        } catch (error) {
+          console.error("Error updating call logs:", error)
+        }
+      }
+
       setJoined(false)
       setCallDuration(0)
       setConnectionStatus("Call ended")
 
-      // Redirect back to chat after ending call
+      // Redirect back to calls page
       setTimeout(() => {
-        router.push("/chat")
+        router.push("/admin/calls")
       }, 1000)
     }
   }
@@ -187,7 +214,7 @@ const CallPage = () => {
   }
 
   const toggleVideo = () => {
-    if (callType === "audio") return // No video in audio calls
+    if (callType === "audio") return
 
     const videoTrack = localTracksRef.current?.[1]
     if (videoTrack) {
@@ -209,18 +236,18 @@ const CallPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white">
-      {/* Header with Doctor/Patient Info */}
+      {/* Header */}
       <header className="bg-black/20 backdrop-blur-md border-b border-white/10 p-4">
         <div className="container mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => router.push("/chat")}
+              onClick={() => router.push("/admin/calls")}
               className="text-white hover:bg-white/10"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Chat
+              Back to Calls
             </Button>
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-green-500 rounded-full flex items-center justify-center">
@@ -232,9 +259,9 @@ const CallPage = () => {
               </div>
               <div>
                 <h2 className="font-semibold">
-                  {callType === "video" ? "Video Call" : "Audio Call"} with Dr. Nitin Mishra
+                  {callType === "video" ? "Video Call" : "Audio Call"} with {callData?.patientName || "Patient"}
                 </h2>
-                <p className="text-sm text-gray-300">Dermatologist - MBBS, MD (Skin & VD)</p>
+                <p className="text-sm text-gray-300">Doctor Session</p>
               </div>
             </div>
           </div>
@@ -269,12 +296,12 @@ const CallPage = () => {
           // VIDEO CALL LAYOUT
           <div className="h-full flex flex-col">
             <div className="flex-1 grid lg:grid-cols-2 gap-6 mb-6">
-              {/* Local Video */}
+              {/* Local Video (Doctor) */}
               <Card className="bg-black/40 border-white/10 backdrop-blur-sm">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-gray-300 flex items-center">
                     <Users className="h-4 w-4 mr-2" />
-                    You ({defaultRole === "doctor" ? "Doctor" : "Patient"})
+                    You (Doctor)
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -294,12 +321,12 @@ const CallPage = () => {
                 </CardContent>
               </Card>
 
-              {/* Remote Video */}
+              {/* Remote Video (Patient) */}
               <Card className="bg-black/40 border-white/10 backdrop-blur-sm">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-gray-300 flex items-center">
                     <Users className="h-4 w-4 mr-2" />
-                    {defaultRole === "doctor" ? "Patient" : "Dr. Nitin Mishra"}
+                    {callData?.patientName || "Patient"}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -310,9 +337,7 @@ const CallPage = () => {
                     {remoteUsers.length === 0 && (
                       <div className="text-center">
                         <Users className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-400">
-                          Waiting for {defaultRole === "doctor" ? "patient" : "doctor"} to join...
-                        </p>
+                        <p className="text-gray-400">Waiting for patient to join...</p>
                       </div>
                     )}
                   </div>
@@ -381,9 +406,7 @@ const CallPage = () => {
                 <div className="w-24 h-24 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Phone className="h-12 w-12 text-white" />
                 </div>
-                <CardTitle className="text-xl">
-                  {defaultRole === "doctor" ? "Patient Call" : "Dr. Nitin Mishra"}
-                </CardTitle>
+                <CardTitle className="text-xl">{callData?.patientName || "Patient"} Call</CardTitle>
                 <p className="text-gray-400">Audio Call Session</p>
                 {joined && (
                   <div className="flex items-center justify-center space-x-2 text-lg font-mono mt-2">
@@ -456,4 +479,4 @@ const CallPage = () => {
   )
 }
 
-export default CallPage
+export default AdminCallPage

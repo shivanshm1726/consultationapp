@@ -1,100 +1,121 @@
-"use client"
+"use client";
 
-import type React from "react"
-
-import { useState, useEffect } from "react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { ArrowLeft, Stethoscope, User, Eye, EyeOff } from "lucide-react"
-import { registerUser } from "@/lib/auth"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/contexts/auth-context"
+import type React from "react";
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ArrowLeft, Stethoscope, User, Eye, EyeOff } from "lucide-react";
+import { registerUser } from "@/lib/auth";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/auth-context";
 
 export default function RegisterPage() {
-  const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
     fullName: "",
     age: "",
     email: "",
     password: "",
     confirmPassword: "",
-  })
+    phone: "", // Added phone field
+  });
   const [errors, setErrors] = useState({
     age: "",
     password: "",
     confirmPassword: "",
-  })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-  const router = useRouter()
-  const { user } = useAuth()
+    phone: "", // Added phone error
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const router = useRouter();
+  const { user } = useAuth();
 
   // Redirect if already logged in
   useEffect(() => {
     if (user) {
-      router.push("/")
+      router.push("/");
     }
-  }, [user, router])
+  }, [user, router]);
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-    setError("") // Clear error when user types
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    setError(""); // Clear general error when user types
 
     // Validate age
     if (field === "age") {
-      const ageNum = Number.parseInt(value)
+      const ageNum = Number.parseInt(value);
       if (value && (ageNum < 5 || ageNum > 100)) {
-        setErrors((prev) => ({ ...prev, age: "Age must be between 5 and 100" }))
+        setErrors((prev) => ({ ...prev, age: "Age must be between 5 and 100" }));
       } else {
-        setErrors((prev) => ({ ...prev, age: "" }))
+        setErrors((prev) => ({ ...prev, age: "" }));
       }
     }
 
     // Validate password match
-    if (field === "confirmPassword" || field === "password") {
-      const password = field === "password" ? value : formData.password
-      const confirmPassword = field === "confirmPassword" ? value : formData.confirmPassword
-
+    if (field === "password" || field === "confirmPassword") {
+      const password = field === "password" ? value : formData.password;
+      const confirmPassword = field === "confirmPassword" ? value : formData.confirmPassword;
       if (confirmPassword && password !== confirmPassword) {
-        setErrors((prev) => ({ ...prev, confirmPassword: "Passwords do not match" }))
+        setErrors((prev) => ({ ...prev, confirmPassword: "Passwords do not match" }));
       } else {
-        setErrors((prev) => ({ ...prev, confirmPassword: "" }))
+        setErrors((prev) => ({ ...prev, confirmPassword: "" }));
       }
     }
-  }
+
+    // Validate phone (optional, basic format check)
+    if (field === "phone") {
+      if (value && !/^\+?\d{0,12}$/.test(value)) {
+        setErrors((prev) => ({ ...prev, phone: "Enter a valid phone number (up to 12 digits)" }));
+      } else {
+        setErrors((prev) => ({ ...prev, phone: "" }));
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError("")
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
     // Basic validation
     if (formData.password !== formData.confirmPassword) {
-      setErrors((prev) => ({ ...prev, confirmPassword: "Passwords do not match" }))
-      setLoading(false)
-      return
+      setErrors((prev) => ({ ...prev, confirmPassword: "Passwords do not match" }));
+      setLoading(false);
+      return;
     }
 
-    const ageNum = Number.parseInt(formData.age)
+    const ageNum = Number.parseInt(formData.age);
     if (ageNum < 5 || ageNum > 100) {
-      setErrors((prev) => ({ ...prev, age: "Age must be between 5 and 100" }))
-      setLoading(false)
-      return
+      setErrors((prev) => ({ ...prev, age: "Age must be between 5 and 100" }));
+      setLoading(false);
+      return;
+    }
+
+    if (formData.phone && !/^\+?\d{0,12}$/.test(formData.phone)) {
+      setErrors((prev) => ({ ...prev, phone: "Enter a valid phone number (up to 12 digits)" }));
+      setLoading(false);
+      return;
     }
 
     try {
-      await registerUser(formData.email, formData.password, formData.fullName, ageNum)
-      router.push("/") // Redirect to home page after successful registration
+      await registerUser(
+        formData.email,
+        formData.password,
+        formData.fullName,
+        ageNum,
+        formData.phone || undefined // Pass undefined if phone is empty
+      );
+      router.push("/"); // Redirect to home page after successful registration
     } catch (error: any) {
-      setError(error.message || "Registration failed. Please try again.")
+      setError(error.message || "Registration failed. Please try again.");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
@@ -169,6 +190,20 @@ export default function RegisterPage() {
                 </div>
 
                 <div>
+                  <Label htmlFor="phone" className="text-blue-900 dark:text-slate-200">
+                    Phone Number (Optional)
+                  </Label>
+                  <Input
+                    id="phone"
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange("phone", e.target.value)}
+                    className="bg-white/50 dark:bg-slate-700 dark:text-slate-50"
+                    placeholder="Enter your phone number"
+                  />
+                  {errors.phone && <p className="text-red-600 text-sm mt-1">{errors.phone}</p>}
+                </div>
+
+                <div>
                   <Label htmlFor="email" className="text-blue-900 dark:text-slate-200">
                     Email Address *
                   </Label>
@@ -240,7 +275,7 @@ export default function RegisterPage() {
 
                 <Button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || !!errors.age || !!errors.confirmPassword || !!errors.phone}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg disabled:bg-blue-400"
                   size="lg"
                 >
@@ -283,5 +318,5 @@ export default function RegisterPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

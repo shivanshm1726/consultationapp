@@ -38,6 +38,7 @@ export interface Patient {
   createdAt: string
   updatedAt: string
   isActive: boolean
+  patientId: string
 }
 
 export interface Doctor {

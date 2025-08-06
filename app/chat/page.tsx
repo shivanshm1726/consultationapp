@@ -62,6 +62,7 @@ function LiveChatContent() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { theme } = useTheme()
+  const INACTIVITY_LIMIT = 10 * 60 * 1000 // 10 minutes in milliseconds
 
   const doctorEmail = process.env.NEXT_PUBLIC_DOCTOR_EMAIL!
 
@@ -134,7 +135,7 @@ function LiveChatContent() {
         try {
           const userDocRef = doc(db, "users", user.uid)
           const userDoc = await getDoc(userDocRef)
-          
+
           if (userDoc.exists()) {
             console.log("User document exists:", userDoc.data())
             console.log("User role:", userDoc.data().role)
@@ -148,7 +149,7 @@ function LiveChatContent() {
 
         const activeChatsRef = collection(db, "activeChats")
         const q = query(activeChatsRef, where("patientEmail", "==", user.email), where("status", "==", "active"))
-        
+
         console.log("=== TESTING FIRESTORE PERMISSIONS ===")
         try {
           console.log("Testing read permissions...")
@@ -171,6 +172,7 @@ function LiveChatContent() {
           urgency: preFormData.urgency,
           timestamp: serverTimestamp(),
           status: "active",
+          expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes expiration
         }
 
         console.log("=== DEBUG: About to create/update activeChats ===")
@@ -186,16 +188,16 @@ function LiveChatContent() {
           console.log("✅ Document updated successfully")
         } else {
           console.log("📝 Creating new document")
-          
+
           try {
             console.log("About to call addDoc with:", {
               collection: "activeChats",
               data: chatData
             })
-            
+
             const docRef = await addDoc(activeChatsRef, chatData)
             console.log("✅ addDoc returned successfully with ID:", docRef.id)
-            
+
             // Verify document creation
             setTimeout(async () => {
               try {
@@ -209,7 +211,7 @@ function LiveChatContent() {
                 console.error("❌ Error verifying document:", verifyError)
               }
             }, 1000)
-            
+
           } catch (createError) {
             console.error("❌ Document creation failed:", createError)
             if (typeof createError === "object" && createError !== null && "code" in createError) {
@@ -228,7 +230,7 @@ function LiveChatContent() {
         console.error("Error message:", error.message)
         console.error("Error code:", error.code)
         console.error("Full error:", error)
-        
+
         toast({
           title: "Error",
           description: `Failed to start chat: ${error.message}`,
@@ -286,7 +288,7 @@ function LiveChatContent() {
       if (loggedInUser) {
         console.log("=== AUTH STATE CHANGE ===")
         console.log("User logged in:", loggedInUser.email)
-        
+
         setPreFormData((prev) => ({
           ...prev,
           name: loggedInUser.displayName || loggedInUser.email?.split("@")[0] || "",
@@ -295,7 +297,7 @@ function LiveChatContent() {
         try {
           const userDocRef = doc(db, "users", loggedInUser.uid)
           const userDoc = await getDoc(userDocRef)
-          
+
           if (!userDoc.exists()) {
             console.log("Creating user document for:", loggedInUser.email)
             const userData = {
@@ -368,14 +370,14 @@ function LiveChatContent() {
         }
       } else {
         console.log("No user logged in, redirecting to home")
-        await removeFromActiveChats(false)
+        await removeFromActiveChats(true)
         router.push("/")
       }
     })
 
     const handleBeforeUnload = async () => {
       console.log("Before unload triggered")
-      await removeFromActiveChats(false)
+      await removeFromActiveChats(true)
     }
 
     const handleVisibilityChange = async () => {
@@ -396,6 +398,55 @@ function LiveChatContent() {
       // Removed removeFromActiveChats from cleanup to prevent unintended deletion
     }
   }, [user, router, doctorEmail])
+
+  useEffect(() => {
+    if (!user) return // Do nothing if user is not logged in
+
+    let inactivityTimer: NodeJS.Timeout
+
+    const resetInactivityTimer = () => {
+      clearTimeout(inactivityTimer)
+      inactivityTimer = setTimeout(async () => {
+        console.log("🛑 User inactive for 10 minutes, removing from activeChats.")
+
+        await removeFromActiveChats(true)
+
+        toast({
+          title: "Session Ended",
+          description: "You were inactive for more than 10 minutes. The consultation session has ended.",
+          variant: "destructive",
+        })
+
+        setChatStarted(false)
+        setMessages([])
+        setNewMessage("")
+        setSelectedFile(null)
+        setPreFormData({
+          name: user?.displayName || user?.email?.split("@")[0] || "",
+          age: "",
+          gender: "",
+          symptoms: "",
+          contact: "",
+          urgency: "",
+        })
+
+        router.push("/")
+      }, INACTIVITY_LIMIT)
+    }
+
+    // List of events considered as activity
+    const events = ["mousemove", "keydown", "click", "scroll", "touchstart"]
+    events.forEach((event) => window.addEventListener(event, resetInactivityTimer))
+
+    // Start the initial timer
+    resetInactivityTimer()
+
+    return () => {
+      clearTimeout(inactivityTimer)
+      events.forEach((event) => window.removeEventListener(event, resetInactivityTimer))
+    }
+  }, [user])
+
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -431,7 +482,7 @@ function LiveChatContent() {
           mediaUrl: fileURL,
           mediaType: mediaType,
           fileName: selectedFile.name,
-          text: newMessage.trim() || undefined,
+          text: newMessage.trim(),
         }
       } else {
         messageData.text = newMessage.trim()
@@ -465,21 +516,11 @@ function LiveChatContent() {
   }
 
   const handleEndConsultation = async () => {
-    if (window.confirm("Are you sure you want to end this consultation? This will clear your chat history.")) {
+    if (window.confirm("Are you sure you want to end this consultation? This will end the current session.")) {
       try {
         console.log("Ending consultation for user:", user?.email)
-        await removeFromActiveChats(true) // Force deletion
 
-        if (roomId) {
-          const messagesRef = collection(db, "chats", roomId, "messages")
-          const snapshot = await getDocs(messagesRef)
-          console.log("Deleting messages, found:", snapshot.docs.length, "documents")
-          const deletePromises = snapshot.docs.map((doc) => {
-            console.log("Deleting message:", doc.id)
-            return deleteDoc(doc.ref)
-          })
-          await Promise.all(deletePromises)
-        }
+        await removeFromActiveChats(true)
         setChatStarted(false)
         setMessages([])
         setNewMessage("")
@@ -492,6 +533,7 @@ function LiveChatContent() {
           contact: "",
           urgency: "",
         })
+
         console.log("Consultation ended, redirecting to home")
         router.push("/")
       } catch (err) {
@@ -761,62 +803,63 @@ function LiveChatContent() {
             </CardHeader>
 
             {/* Chat Messages */}
-            <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages.length === 0 && (
-                <div className="text-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
-                  <p className="text-gray-500 dark:text-gray-400">Connecting to Dr. Nitin Mishra...</p>
-                </div>
-              )}
+            <CardContent className="flex-1 p-0">
+              <div className="h-[calc(100vh-280px)] overflow-y-auto p-4 space-y-4">
+                {messages.length === 0 && (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+                    <p className="text-gray-500 dark:text-gray-400">Connecting to Dr. Nitin Mishra...</p>
+                  </div>
+                )}
 
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.senderEmail === user?.email ? "justify-end" : "justify-start"} mb-2`}
-                >
+                {messages.map((msg) => (
                   <div
-                    className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg shadow-sm ${
-                      msg.senderEmail === user?.email
+                    key={msg.id}
+                    className={`flex ${msg.senderEmail === user?.email ? "justify-end" : "justify-start"} mb-2`}
+                  >
+                    <div
+                      className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg shadow-sm ${msg.senderEmail === user?.email
                         ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white"
                         : msg.senderEmail === "system"
                           ? "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 border border-yellow-200 dark:border-yellow-700"
                           : "bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 border dark:border-gray-700"
-                    }`}
-                  >
-                    {msg.text && <p className="text-sm leading-relaxed">{msg.text}</p>}
+                        }`}
+                    >
+                      {msg.text && <p className="text-sm leading-relaxed">{msg.text}</p>}
 
-                    {msg.mediaUrl && msg.mediaType === "image" && (
-                      <img
-                        src={msg.mediaUrl || "/placeholder.svg"}
-                        alt={msg.fileName || "Uploaded image"}
-                        className="mt-2 rounded-md max-w-full max-h-64 object-contain"
-                      />
-                    )}
-                    {msg.mediaUrl && msg.mediaType === "video" && (
-                      <video
-                        controls
-                        src={msg.mediaUrl}
-                        className="mt-2 rounded-md max-w-full max-h-64 object-contain"
-                      />
-                    )}
-                    {msg.mediaUrl && msg.mediaType === "file" && (
-                      <a
-                        href={msg.mediaUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 underline text-sm block text-white"
-                      >
-                        📎 {msg.fileName || "File"}
-                      </a>
-                    )}
+                      {msg.mediaUrl && msg.mediaType === "image" && (
+                        <img
+                          src={msg.mediaUrl || "/placeholder.svg"}
+                          alt={msg.fileName || "Uploaded image"}
+                          className="mt-2 rounded-md max-w-full max-h-64 object-contain"
+                        />
+                      )}
+                      {msg.mediaUrl && msg.mediaType === "video" && (
+                        <video
+                          controls
+                          src={msg.mediaUrl}
+                          className="mt-2 rounded-md max-w-full max-h-64 object-contain"
+                        />
+                      )}
+                      {msg.mediaUrl && msg.mediaType === "file" && (
+                        <a
+                          href={msg.mediaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 underline text-sm block text-white"
+                        >
+                          📎 {msg.fileName || "File"}
+                        </a>
+                      )}
 
-                    <p className="text-xs mt-1 opacity-70">
-                      {msg.timestamp?.toLocaleTimeString?.() ?? new Date().toLocaleTimeString()}
-                    </p>
+                      <p className="text-xs mt-1 opacity-70">
+                        {msg.timestamp?.toLocaleTimeString?.() ?? new Date().toLocaleTimeString()}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
-              <div ref={bottomRef} />
+                ))}
+                <div ref={bottomRef} />
+              </div>
             </CardContent>
 
             {/* Message Input */}

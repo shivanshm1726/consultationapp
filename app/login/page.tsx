@@ -64,6 +64,14 @@ export default function Login() {
     try {
       const userCredential = await loginUser(formData.email, formData.password);
       const user = userCredential;
+      const token = await user.getIdToken();
+      await fetch("/api/setToken", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ token }),
+      });
 
       const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || "drnitinmishraderma@gmail.com";
       if (user.email === ADMIN_EMAIL) {
@@ -80,6 +88,7 @@ export default function Login() {
 
       const userData = docSnap.data();
       const role = userData.role;
+      localStorage.setItem("role", role);
 
       if (role === "receptionist") {
         router.push("/reception");
@@ -87,7 +96,17 @@ export default function Login() {
         router.push("/");
       }
     } catch (error: any) {
-      setError(error.message || "Login failed. Please check your credentials.");
+      let message = "Login failed. Please check your credentials.";
+
+      if (error.code === "auth/invalid-credential" || error.code === "auth/wrong-password") {
+        message = "Invalid email or password.";
+      } else if (error.code === "auth/user-not-found") {
+        message = "User not found. Please check your email.";
+      } else if (error.code === "auth/too-many-requests") {
+        message = "Too many login attempts. Please try again later.";
+      }
+
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -126,7 +145,7 @@ export default function Login() {
       >
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <motion.div 
+            <motion.div
               initial={{ x: -20, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               transition={{ delay: 0.2 }}
@@ -139,8 +158,8 @@ export default function Login() {
                 </Button>
               </Link>
               <div className="flex items-center space-x-3">
-                <motion.div 
-                  animate={{ 
+                <motion.div
+                  animate={{
                     rotate: [0, 10, 0],
                     transition: { repeat: Infinity, duration: 3 }
                   }}

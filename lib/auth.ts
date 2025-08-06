@@ -1,74 +1,80 @@
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from "firebase/auth"
-import { doc, setDoc, getDoc } from "firebase/firestore"
-import { auth, db } from "./firebase"
+// src/lib/auth.ts
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { auth, db } from "./firebase";
 
 export interface UserData {
-  uid: string
-  email: string
-  fullName: string
-  age: number
-  createdAt: Date
+  uid: string;
+  email: string;
+  fullName: string;
+  age: number;
+  createdAt: Date;
+  role?: "admin" | "receptionist" | "patient";
+  phone?: string; // Added optional phone field
 }
 
-// Register new user
-export const registerUser = async (email: string, password: string, fullName: string, age: number) => {
+export const registerUser = async (email: string, password: string, fullName: string, age: number, phone?: string) => {
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password)
-    const user = userCredential.user
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
 
-    // Update user profile
-    await updateProfile(user, {
-      displayName: fullName,
-    })
+    await updateProfile(user, { displayName: fullName });
 
-    // Save additional user data to Firestore
     const userData: UserData = {
       uid: user.uid,
       email: user.email!,
       fullName,
       age,
       createdAt: new Date(),
-    }
+      phone, // Include phone if provided
+    };
 
-    await setDoc(doc(db, "users", user.uid), userData)
+    await setDoc(doc(db, "users", user.uid), userData);
 
-    return { user, userData }
+    return { user, userData };
   } catch (error: any) {
-    throw new Error(error.message)
+    throw new Error(error.message);
   }
-}
+};
 
-// Login user
 export const loginUser = async (email: string, password: string) => {
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password)
-    return userCredential.user
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    return userCredential.user;
   } catch (error: any) {
-    throw new Error(error.message)
+    throw new Error(error.message);
   }
-}
+};
 
-// Logout user
 export const logoutUser = async () => {
   try {
-    await signOut(auth)
+    await signOut(auth);
+    document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
   } catch (error: any) {
-    throw new Error(error.message)
+    throw new Error(error.message);
   }
-}
+};
 
-// Get user data from Firestore
 export const getUserData = async (uid: string): Promise<UserData | null> => {
   try {
-    const docRef = doc(db, "users", uid)
-    const docSnap = await getDoc(docRef)
+    const docRef = doc(db, "users", uid);
+    const docSnap = await getDoc(docRef);
 
     if (docSnap.exists()) {
-      return docSnap.data() as UserData
+      return docSnap.data() as UserData;
     } else {
-      return null
+      return null;
     }
   } catch (error: any) {
-    throw new Error(error.message)
+    throw new Error(error.message);
   }
-}
+};
+
+// Optional: Add a function to update user data
+export const updateUserData = async (uid: string, data: Partial<UserData>) => {
+  try {
+    await setDoc(doc(db, "users", uid), data, { merge: true });
+  } catch (error: any) {
+    throw new Error(error.message);
+  }
+};

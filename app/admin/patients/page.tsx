@@ -19,6 +19,7 @@ import {
   Printer,
   Loader2,
   User,
+  Mail,
 } from "lucide-react"
 
 interface Patient {
@@ -48,45 +49,113 @@ export default function PatientsPage() {
     }
   }, [user])
 
+  // Real-time snapshot from appointments
   useEffect(() => {
-  const unsubscribe = onSnapshot(
-    query(collection(db, "appointments"), orderBy("createdAt", "desc")),
-    (snapshot) => {
-      const map = new Map<string, Patient>()
+    if (!user) return
 
-      snapshot.docs.forEach((doc) => {
-        const data = doc.data()
-        const email = data.email || ""
-        const phone = data.phone || ""
-        const key = email || phone || doc.id
+    const unsubscribe = onSnapshot(
+      query(collection(db, "appointments"), orderBy("createdAt", "desc")),
+      (snapshot) => {
+        const map = new Map<string, Patient>()
 
-        if (!map.has(key)) {
-          map.set(key, {
-            id: doc.id,
-            patientName: `${data.firstName || ""} ${data.lastName || ""}`.trim() || "Unknown",
-            contactNumber: data.phone || "N/A",
-            chiefComplaint: data.symptoms || "Not specified",
-            email: data.email || "",
-            age: data.age,
-            gender: data.gender,
-            createdAt: data.createdAt?.toDate() || new Date(),
-          })
-        }
+        snapshot.docs.forEach((doc) => {
+          const data = doc.data()
+          
+          // Better name extraction
+          let patientName = "Unknown Patient"
+          if (data.firstName && data.lastName) {
+            patientName = `${data.firstName} ${data.lastName}`.trim()
+          } else if (data.firstName) {
+            patientName = data.firstName
+          } else if (data.lastName) {
+            patientName = data.lastName
+          } else if (data.patientName) {
+            patientName = data.patientName
+          } else if (data.name) {
+            patientName = data.name
+          }
+
+          // Better contact extraction
+          let contactNumber = "N/A"
+          if (data.phone) {
+            contactNumber = data.phone
+          } else if (data.phoneNumber) {
+            contactNumber = data.phoneNumber
+          } else if (data.contactNumber) {
+            contactNumber = data.contactNumber
+          } else if (data.mobile) {
+            contactNumber = data.mobile
+          }
+
+          // Better email extraction
+          let email = ""
+          if (data.email) {
+            email = data.email
+          } else if (data.patientEmail) {
+            email = data.patientEmail
+          }
+
+          // Better complaint extraction
+          let chiefComplaint = "Not specified"
+          if (data.symptoms) {
+            chiefComplaint = data.symptoms
+          } else if (data.chiefComplaint) {
+            chiefComplaint = data.chiefComplaint
+          } else if (data.reason) {
+            chiefComplaint = data.reason
+          } else if (data.complaint) {
+            chiefComplaint = data.complaint
+          } else if (data.description) {
+            chiefComplaint = data.description
+          }
+
+          // Use email as primary key, fallback to phone, then doc ID
+          const key = email || contactNumber || doc.id
+
+          if (!map.has(key)) {
+            map.set(key, {
+              id: doc.id,
+              patientName,
+              contactNumber,
+              chiefComplaint,
+              email,
+              age: data.age,
+              gender: data.gender,
+              createdAt: data.createdAt?.toDate() || new Date(),
+            })
+          }
+        })
+
+        setPatients(Array.from(map.values()))
+        setLoading(false)
+      },
+      (error) => {
+        console.error("Error in real-time listener:", error)
+        setLoading(false)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [user])
+
+  // Filter logic based on search term
+  useEffect(() => {
+    if (!searchTerm) {
+      setFilteredPatients(patients)
+    } else {
+      const lowerSearch = searchTerm.toLowerCase()
+      const filtered = patients.filter((p) => {
+        return (
+          p.patientName?.toLowerCase().includes(lowerSearch) ||
+          p.contactNumber?.toLowerCase().includes(lowerSearch) ||
+          p.chiefComplaint?.toLowerCase().includes(lowerSearch) ||
+          p.email?.toLowerCase().includes(lowerSearch)
+        )
       })
-
-      setPatients(Array.from(map.values()))
-      setLoading(false)
-    },
-    (error) => {
-      console.error("Error in real-time listener:", error)
-      setLoading(false)
+      setFilteredPatients(filtered)
     }
-  )
-
-  return () => unsubscribe()
-}, [])
-
-
+    setCurrentPage(1) // Reset to first page when searching
+  }, [searchTerm, patients])
 
   const fetchPatients = async () => {
     try {
@@ -105,33 +174,85 @@ export default function PatientsPage() {
       // Process chats data
       chatsSnapshot.docs.forEach((doc) => {
         const data = doc.data()
-        const email = data.patientEmail || data.userEmail
+        
+        let email = data.patientEmail || data.userEmail || data.email || ""
+        let patientName = data.patientName || data.userName || "Unknown Patient"
+        let contactNumber = data.phoneNumber || data.contactNumber || data.phone || "N/A"
+        let chiefComplaint = data.chiefComplaint || data.message || "General consultation"
+
         if (email && !patientsMap.has(email)) {
           patientsMap.set(email, {
             id: doc.id,
-            patientName: data.patientName || data.userName || "Unknown Patient",
-            contactNumber: data.phoneNumber || data.contactNumber || "N/A",
-            chiefComplaint: data.chiefComplaint || data.message || "General consultation",
-            email: email,
+            patientName,
+            contactNumber,
+            chiefComplaint,
+            email,
             createdAt: data.createdAt?.toDate() || new Date(),
           })
         }
       })
 
-      // Process appointments data
+      // Process appointments data with better field mapping
       appointmentsSnapshot.docs.forEach((doc) => {
         const data = doc.data()
-        const email = data.patientEmail || data.email
-        const phone = data.phoneNumber || data.contactNumber
-        const key = email || phone || doc.id
+        
+        // Better name extraction
+        let patientName = "Unknown Patient"
+        if (data.firstName && data.lastName) {
+          patientName = `${data.firstName} ${data.lastName}`.trim()
+        } else if (data.firstName) {
+          patientName = data.firstName
+        } else if (data.lastName) {
+          patientName = data.lastName
+        } else if (data.patientName) {
+          patientName = data.patientName
+        } else if (data.name) {
+          patientName = data.name
+        }
+
+        // Better contact extraction
+        let contactNumber = "N/A"
+        if (data.phone) {
+          contactNumber = data.phone
+        } else if (data.phoneNumber) {
+          contactNumber = data.phoneNumber
+        } else if (data.contactNumber) {
+          contactNumber = data.contactNumber
+        } else if (data.mobile) {
+          contactNumber = data.mobile
+        }
+
+        // Better email extraction
+        let email = ""
+        if (data.email) {
+          email = data.email
+        } else if (data.patientEmail) {
+          email = data.patientEmail
+        }
+
+        // Better complaint extraction
+        let chiefComplaint = "Not specified"
+        if (data.symptoms) {
+          chiefComplaint = data.symptoms
+        } else if (data.chiefComplaint) {
+          chiefComplaint = data.chiefComplaint
+        } else if (data.reason) {
+          chiefComplaint = data.reason
+        } else if (data.complaint) {
+          chiefComplaint = data.complaint
+        } else if (data.description) {
+          chiefComplaint = data.description
+        }
+
+        const key = email || contactNumber || doc.id
 
         if (!patientsMap.has(key)) {
           patientsMap.set(key, {
             id: doc.id,
-            patientName: data.patientName || "Unknown Patient",
-            contactNumber: phone || "N/A",
-            chiefComplaint: data.chiefComplaint || data.reason || "Appointment booking",
-            email: email,
+            patientName,
+            contactNumber,
+            chiefComplaint,
+            email,
             age: data.age,
             gender: data.gender,
             createdAt: data.createdAt?.toDate() || new Date(),
@@ -147,8 +268,6 @@ export default function PatientsPage() {
       setLoading(false)
     }
   }
-
-
 
   // Pagination logic
   const totalPages = Math.ceil(filteredPatients.length / ITEMS_PER_PAGE)
@@ -195,7 +314,7 @@ export default function PatientsPage() {
         <div className="flex-1 max-w-md relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
-            placeholder="Search by name, phone, or complaint..."
+            placeholder="Search by name, phone, email, or complaint..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-slate-200/60 dark:border-slate-700/60"
@@ -243,7 +362,10 @@ export default function PatientsPage() {
                         </th>
                         <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-white">Contact</th>
                         <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-white">
-                          Registration
+                          Chief Complaint
+                        </th>
+                        <th className="text-left py-3 px-4 font-semibold text-slate-900 dark:text-white">
+                          Registration Date
                         </th>
                       </tr>
                     </thead>
@@ -264,7 +386,15 @@ export default function PatientsPage() {
                               <div>
                                 <p className="font-semibold text-slate-900 dark:text-white">{patient.patientName}</p>
                                 {patient.email && (
-                                  <p className="text-sm text-slate-500 dark:text-slate-400">{patient.email}</p>
+                                  <div className="flex items-center text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                    <Mail className="h-3 w-3 mr-1" />
+                                    {patient.email}
+                                  </div>
+                                )}
+                                {patient.age && (
+                                  <p className="text-xs text-slate-400">
+                                    Age: {patient.age} {patient.gender && `• ${patient.gender}`}
+                                  </p>
                                 )}
                               </div>
                             </div>
@@ -310,6 +440,12 @@ export default function PatientsPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-slate-900 dark:text-white">{patient.patientName}</h3>
+                          {patient.email && (
+                            <div className="flex items-center text-sm text-slate-600 dark:text-slate-400 mt-1">
+                              <Mail className="h-3 w-3 mr-1" />
+                              {patient.email}
+                            </div>
+                          )}
                           <div className="flex items-center text-sm text-slate-600 dark:text-slate-400 mt-1">
                             <Phone className="h-3 w-3 mr-1" />
                             {patient.contactNumber}
@@ -318,6 +454,11 @@ export default function PatientsPage() {
                             <FileText className="h-3 w-3 mr-1 mt-0.5 flex-shrink-0" />
                             <span className="line-clamp-2">{patient.chiefComplaint}</span>
                           </div>
+                          {patient.age && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                              Age: {patient.age} {patient.gender && `• ${patient.gender}`}
+                            </p>
+                          )}
                           <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
                             Registered: {patient.createdAt.toLocaleDateString()}
                           </p>
@@ -326,6 +467,53 @@ export default function PatientsPage() {
                     </motion.div>
                   ))}
                 </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between pt-6 border-t border-slate-200 dark:border-slate-700">
+                    <div className="text-sm text-slate-600 dark:text-slate-400">
+                      Showing {startIndex + 1} to {Math.min(endIndex, filteredPatients.length)} of {filteredPatients.length} patients
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="border-slate-200 dark:border-slate-700"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+                      <div className="flex items-center space-x-1">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          const page = i + 1
+                          return (
+                            <Button
+                              key={page}
+                              variant={currentPage === page ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => goToPage(page)}
+                              className="w-8 h-8 p-0"
+                            >
+                              {page}
+                            </Button>
+                          )
+                        })}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="border-slate-200 dark:border-slate-700"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="text-center py-12">

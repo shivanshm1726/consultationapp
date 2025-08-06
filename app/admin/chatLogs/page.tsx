@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,81 +9,123 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Search, MessageSquare, Phone, Video, Clock, Eye, Download, ImageIcon } from "lucide-react"
+import { collection, query, onSnapshot, orderBy, getDocs } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { toast } from "@/components/ui/use-toast"
 
-const chatSessions = [
-  {
-    id: "CHAT001",
-    patient: "Rahul Sharma",
-    doctor: "Dr. Nitin Mishra",
-    date: "2024-01-20",
-    startTime: "10:30 AM",
-    endTime: "11:15 AM",
-    duration: "45 min",
-    type: "chat",
-    status: "completed",
-    messageCount: 24,
-    attachments: 2,
-    lastMessage: "Thank you doctor, I'll follow the prescribed treatment.",
-  },
-  {
-    id: "CALL002",
-    patient: "Priya Patel",
-    doctor: "Dr. Nitin Mishra",
-    date: "2024-01-20",
-    startTime: "11:15 AM",
-    endTime: "12:00 PM",
-    duration: "45 min",
-    type: "video",
-    status: "completed",
-    messageCount: 0,
-    attachments: 0,
-    lastMessage: "Video call completed successfully",
-  },
-  {
-    id: "CALL003",
-    patient: "Amit Kumar",
-    doctor: "Dr. Nitin Mishra",
-    date: "2024-01-19",
-    startTime: "2:00 PM",
-    endTime: "2:30 PM",
-    duration: "30 min",
-    type: "audio",
-    status: "completed",
-    messageCount: 0,
-    attachments: 0,
-    lastMessage: "Audio call completed successfully",
-  },
-]
+interface ChatSession {
+  id: string
+  patient: string
+  doctor: string
+  date: string
+  startTime: string
+  endTime: string
+  duration: string
+  type: string
+  status: string
+  messageCount: number
+  attachments: number
+  lastMessage: string
+}
 
-const callLogs = [
-  {
-    id: "LOG001",
-    patient: "Sneha Gupta",
-    doctor: "Dr. Nitin Mishra",
-    date: "2024-01-18",
-    time: "3:30 PM",
-    duration: "25 min",
-    type: "video",
-    quality: "HD",
-    status: "completed",
-  },
-  {
-    id: "LOG002",
-    patient: "Vikram Singh",
-    doctor: "Dr. Nitin Mishra",
-    date: "2024-01-18",
-    time: "4:15 PM",
-    duration: "0 min",
-    type: "video",
-    quality: "N/A",
-    status: "failed",
-  },
-]
+interface ChatMessage {
+  id: string
+  text?: string
+  senderEmail: string
+  timestamp: any // Firestore Timestamp or Date
+  mediaUrl?: string
+  mediaType?: "image" | "video" | "file"
+  fileName?: string
+}
 
 export default function ChatsAndCallsManagement() {
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
-  const [selectedSession, setSelectedSession] = useState(null)
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
+  const [selectedSessionMessages, setSelectedSessionMessages] = useState<ChatMessage[]>([])
+
+  useEffect(() => {
+    const chatsRef = collection(db, "chatLogs")
+    const q = query(chatsRef, orderBy("date", "desc"))
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const sessions = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as ChatSession[]
+      setChatSessions(sessions)
+    }, (error) => {
+      console.error("Error fetching chat logs: ", error)
+      toast({
+        title: "Error",
+        description: "Failed to load chat logs. Please check your permissions or try again.",
+        variant: "destructive",
+      })
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  const fetchMessagesForSession = async (roomId: string) => {
+    try {
+      const messagesRef = collection(db, "chats", roomId, "messages")
+      const messagesQuery = query(messagesRef, orderBy("timestamp"))
+      const snapshot = await getDocs(messagesQuery)
+      const messages = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as ChatMessage[]
+      setSelectedSessionMessages(messages)
+    } catch (error) {
+      console.error("Error fetching messages for session: ", error)
+      toast({
+        title: "Error",
+        description: "Failed to load chat messages. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDownload = (session: ChatSession) => {
+    try {
+      const data = {
+        id: session.id,
+        patient: session.patient,
+        doctor: session.doctor,
+        date: session.date,
+        startTime: session.startTime,
+        endTime: session.endTime,
+        duration: session.duration,
+        type: session.type,
+        status: session.status,
+        messageCount: session.messageCount,
+        attachments: session.attachments,
+        lastMessage: session.lastMessage,
+        messages: selectedSessionMessages,
+      }
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `chat_session_${session.id}.json`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+      toast({
+        title: "Success",
+        description: "Chat session data downloaded successfully.",
+        variant: "default",
+      })
+    } catch (error) {
+      console.error("Error downloading session: ", error)
+      toast({
+        title: "Error",
+        description: "Failed to download session data. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
 
   const filteredSessions = chatSessions.filter((session) => {
     const matchesSearch =
@@ -144,7 +186,7 @@ export default function ChatsAndCallsManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Sessions</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">1,847</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{chatSessions.length}</p>
               </div>
               <MessageSquare className="h-8 w-8 text-blue-600" />
             </div>
@@ -155,7 +197,9 @@ export default function ChatsAndCallsManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Chat Sessions</p>
-                <p className="text-2xl font-bold text-purple-600">892</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {chatSessions.filter((s) => s.type === "chat").length}
+                </p>
               </div>
               <MessageSquare className="h-8 w-8 text-purple-600" />
             </div>
@@ -166,7 +210,9 @@ export default function ChatsAndCallsManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Video Calls</p>
-                <p className="text-2xl font-bold text-blue-600">654</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {chatSessions.filter((s) => s.type === "video").length}
+                </p>
               </div>
               <Video className="h-8 w-8 text-blue-600" />
             </div>
@@ -177,7 +223,9 @@ export default function ChatsAndCallsManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Audio Calls</p>
-                <p className="text-2xl font-bold text-green-600">301</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {chatSessions.filter((s) => s.type === "audio").length}
+                </p>
               </div>
               <Phone className="h-8 w-8 text-green-600" />
             </div>
@@ -204,7 +252,7 @@ export default function ChatsAndCallsManagement() {
                   <div className="flex items-center space-x-2">{getTypeIcon(session.type)}</div>
                   <div className="flex-1">
                     <div className="flex items-center space-x-2">
-                      <h3 className="font-semibold text-gray-900 dark:text-white">{session.id}</h3>
+                      <h3 className="font-semibold text-gray-900 dark:text-white">{session.patient}</h3>
                       <Badge
                         variant={session.status === "completed" ? "default" : "secondary"}
                         className={
@@ -243,13 +291,13 @@ export default function ChatsAndCallsManagement() {
                 <div className="flex items-center space-x-2">
                   <Dialog>
                     <DialogTrigger asChild>
-                      <Button variant="ghost" size="sm">
+                      <Button variant="ghost" size="sm" onClick={() => fetchMessagesForSession(session.id)}>
                         <Eye className="h-4 w-4" />
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
                       <DialogHeader>
-                        <DialogTitle>Session Details - {session.id}</DialogTitle>
+                        <DialogTitle>Session Details - {session.patient}</DialogTitle>
                       </DialogHeader>
                       <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
@@ -276,84 +324,63 @@ export default function ChatsAndCallsManagement() {
                           <div className="space-y-3">
                             <h4 className="font-semibold">Chat Messages</h4>
                             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-3 max-h-60 overflow-y-auto">
-                              <div className="flex justify-start">
-                                <div className="bg-white dark:bg-gray-700 rounded-lg p-3 max-w-xs">
-                                  <p className="text-sm">
-                                    Hello doctor, I have been experiencing skin rash on my arms.
-                                  </p>
-                                  <p className="text-xs text-gray-500 mt-1">10:32 AM</p>
+                              {selectedSessionMessages.length === 0 && (
+                                <p className="text-gray-500 dark:text-gray-400 text-center">No messages available</p>
+                              )}
+                              {selectedSessionMessages.map((msg) => (
+                                <div
+                                  key={msg.id}
+                                  className={`flex ${
+                                    msg.senderEmail.includes("drnitinmishraderma") ? "justify-end" : "justify-start"
+                                  }`}
+                                >
+                                  <div
+                                    className={`max-w-xs p-3 rounded-lg ${
+                                      msg.senderEmail.includes("drnitinmishraderma")
+                                        ? "bg-blue-600 text-white"
+                                        : "bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
+                                    }`}
+                                  >
+                                    {msg.text && <p className="text-sm">{msg.text}</p>}
+                                    {msg.mediaUrl && msg.mediaType === "image" && (
+                                      <img
+                                        src={msg.mediaUrl}
+                                        alt={msg.fileName || "Uploaded image"}
+                                        className="mt-2 max-w-full h-auto rounded"
+                                      />
+                                    )}
+                                    {msg.mediaUrl && msg.mediaType === "video" && (
+                                      <video
+                                        src={msg.mediaUrl}
+                                        controls
+                                        className="mt-2 max-w-full h-auto rounded"
+                                      />
+                                    )}
+                                    {msg.mediaUrl && msg.mediaType === "file" && (
+                                      <a
+                                        href={msg.mediaUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="mt-2 text-sm underline"
+                                      >
+                                        📎 {msg.fileName || "File"}
+                                      </a>
+                                    )}
+                                    <p className="text-xs mt-1 opacity-70">
+                                      {msg.timestamp?.toDate?.()?.toLocaleTimeString?.() || "Unknown time"}
+                                    </p>
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="flex justify-end">
-                                <div className="bg-blue-600 text-white rounded-lg p-3 max-w-xs">
-                                  <p className="text-sm">Can you describe the rash? When did it start?</p>
-                                  <p className="text-xs text-blue-200 mt-1">10:35 AM</p>
-                                </div>
-                              </div>
-                              <div className="flex justify-start">
-                                <div className="bg-white dark:bg-gray-700 rounded-lg p-3 max-w-xs">
-                                  <p className="text-sm">It started 3 days ago. It's red and itchy.</p>
-                                  <p className="text-xs text-gray-500 mt-1">10:36 AM</p>
-                                </div>
-                              </div>
+                              ))}
                             </div>
                           </div>
                         )}
                       </div>
                     </DialogContent>
                   </Dialog>
-                  <Button variant="ghost" size="sm">
+                  <Button variant="ghost" size="sm" onClick={() => handleDownload(session)}>
                     <Download className="h-4 w-4" />
                   </Button>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Call Quality Logs */}
-      <Card className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm border-0 shadow-xl">
-        <CardHeader>
-          <CardTitle>Call Quality Logs</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {callLogs.map((log, index) => (
-              <motion.div
-                key={log.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
-              >
-                <div className="flex items-center space-x-4">
-                  {getTypeIcon(log.type)}
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <h3 className="font-semibold text-gray-900 dark:text-white">{log.id}</h3>
-                      <Badge
-                        variant={log.status === "completed" ? "default" : "destructive"}
-                        className={
-                          log.status === "completed"
-                            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                            : ""
-                        }
-                      >
-                        {log.status}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center space-x-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      <span>
-                        {log.patient} with {log.doctor}
-                      </span>
-                      <span>
-                        {log.date} {log.time}
-                      </span>
-                      <span>{log.duration}</span>
-                      <span>Quality: {log.quality}</span>
-                    </div>
-                  </div>
                 </div>
               </motion.div>
             ))}
