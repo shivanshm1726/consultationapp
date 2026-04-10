@@ -5,7 +5,6 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useAuthState } from "react-firebase-hooks/auth";
 import {
   Phone,
   PhoneOff,
@@ -18,29 +17,20 @@ import {
   ArrowLeft,
   Loader2,
 } from "lucide-react";
-import { auth, db } from "@/lib/firebase";
-import {
-  doc,
-  getDocs,
-  query,
-  where,
-  onSnapshot,
-  addDoc,
-  collection,
-  deleteDoc,
-  serverTimestamp,
-} from "firebase/firestore";
+import { useAuth } from "@/contexts/auth-context";
+import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
 
 const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID!;
-const tokenBaseURL = process.env.NEXT_PUBLIC_TOKEN_BASE_URL!;
+const tokenBaseURL = "http://localhost:5001/api/calls/get-token";
+const CALL_API = "http://localhost:5001/api/calls";
 
 const PatientCallPage = () => {
-  const [user] = useAuthState(auth);
+  const { user, userData } = useAuth();
   const searchParams = useSearchParams();
-  const channelName = searchParams.get("channel");
+  const channelNameFromUrl = searchParams.get("channel");
   const callType = searchParams.get("type") || "video";
-  const callId = searchParams.get("callId");
+  const [callId, setCallId] = useState<string | null>(searchParams.get("callId"));
   const router = useRouter();
 
   const localVideoRef = useRef<HTMLDivElement>(null);
@@ -56,84 +46,68 @@ const PatientCallPage = () => {
   const [mutedAudio, setMutedAudio] = useState(false);
   const [mutedVideo, setMutedVideo] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
-  const [connectionStatus, setConnectionStatus] = useState(
-    "Waiting for doctor..."
-  );
+  const [connectionStatus, setConnectionStatus] = useState("Waiting for doctor...");
   const [callStatus, setCallStatus] = useState<string>("waiting");
+
+  const fetchCallStatus = async (id: string) => {
+    try {
+      const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+      const token = tokenMatch ? tokenMatch[1] : null;
+
+      const response = await axios.get(`${CALL_API}/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const data = response.data;
+      setCallStatus(data.status || "waiting");
+      
+      if (data.status === "connected" && !joined) {
+        joinCall(data.channelName);
+      } else if (data.status === "ended") {
+        alert("Call has ended.");
+        router.push("/");
+      }
+    } catch (err) {
+      console.error("Error fetching call status:", err);
+    }
+  };
 
   useEffect(() => {
     const createCallIfNeeded = async () => {
       if (!user || callId) return;
 
-      // Step 1: Query Firestore for any active call by this patient
-      const q = query(
-        collection(db, "activeCalls"),
-        where("patientEmail", "==", user.email),
-        where("status", "in", ["waiting", "connected"])
-      );
+      try {
+        const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+        const token = tokenMatch ? tokenMatch[1] : null;
 
-      const snapshot = await getDocs(q);
+        const channel = channelNameFromUrl || uuidv4();
+        
+        const response = await axios.post(CALL_API, {
+          patientName: userData?.fullName || "Patient",
+          patientEmail: user.email,
+          callType,
+          channelName: channel
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
 
-      // Step 2: If a call already exists, don't create another
-      if (!snapshot.empty) {
-        alert("You already have an active call. Please wait for the doctor.");
-        return;
+        const newCall = response.data;
+        setCallId(newCall._id);
+        router.replace(`/call?type=${callType}&channel=${channel}&callId=${newCall._id}`);
+      } catch (err) {
+        console.error("Error creating call:", err);
       }
-
-      // Step 3: Create the call only if no existing call is found
-      const newCallRef = await addDoc(collection(db, "activeCalls"), {
-        patientName: user.displayName || "Patient",
-        patientEmail: user.email || "",
-        patientPhone: "",
-        patientUid: user.uid,
-        callType,
-        status: "waiting",
-        createdAt: serverTimestamp(),
-        channelName: channelName || uuidv4(),
-        urgency: "NA",
-      });
-
-      // Step 4: Redirect to same page with callId in URL
-      router.replace(
-        `/call?page=1&type=${callType}&channel=${channelName}&callId=${newCallRef.id}`
-      );
     };
 
     createCallIfNeeded();
-  }, [user, callId]);
+  }, [user, callId, userData]);
 
   useEffect(() => {
-    if (!channelName || !callId) return;
-
-    const callDocRef = doc(db, "activeCalls", callId);
-
-    const unsubscribe = onSnapshot(callDocRef, (docSnap) => {
-      if (!docSnap.exists()) {
-        alert("Doctor has ended the call.");
-        router.push("/");
-      }
-    });
-
-    return () => unsubscribe();
-  }, [channelName, callId]);
-
-  // Listen to call status changes
-  useEffect(() => {
-    if (!callId) return;
-
-    const unsubscribe = onSnapshot(doc(db, "activeCalls", callId), (doc) => {
-      if (doc.exists()) {
-        const data = doc.data();
-        setCallStatus(data.status || "waiting");
-
-        if (data.status === "connected" && !joined) {
-          // Doctor joined, auto-join the call
-          joinCall();
-        }
-      }
-    });
-
-    return () => unsubscribe();
+    if (callId) {
+      fetchCallStatus(callId);
+      const interval = setInterval(() => fetchCallStatus(callId), 3000);
+      return () => clearInterval(interval);
+    }
   }, [callId, joined]);
 
   // Load AgoraRTC dynamically
@@ -143,7 +117,7 @@ const PatientCallPage = () => {
         const rtc = await import("agora-rtc-sdk-ng");
         setAgoraRTC(rtc);
         // Auto-join when component loads
-        if (channelName) {
+        if (channelNameFromUrl) {
           setTimeout(() => joinCall(), 1000);
         }
       } catch (error) {
@@ -176,21 +150,22 @@ const PatientCallPage = () => {
       .padStart(2, "0")}`;
   };
 
-  const joinCall = async () => {
-    if (!channelName || !user || !AgoraRTC) return;
+  const joinCall = async (channel?: string) => {
+    const actualChannel = channel || channelNameFromUrl;
+    if (!actualChannel || !user || !AgoraRTC) return;
 
     setConnecting(true);
     setConnectionStatus("Joining call...");
 
     try {
-      const uid = `patient_${user.uid}`;
+      const uid = `patient_${user.userId}`; // Use userId from MERN auth
       let token = null;
 
       // Try to fetch token
       try {
         if (tokenBaseURL) {
           const res = await fetch(
-            `${tokenBaseURL}?channelName=${channelName}&uid=${uid}&role=patient`
+            `${tokenBaseURL}?channelName=${actualChannel}&uid=${uid}&role=patient`
           );
           if (res.ok) {
             const data = await res.json();
@@ -225,7 +200,7 @@ const PatientCallPage = () => {
         setRemoteUsers((prev) => prev.filter((u) => u.uid !== remoteUser.uid));
       });
 
-      await client.join(appId, channelName, token, uid);
+      await client.join(appId, actualChannel, token, uid);
 
       // Create tracks based on call type
       if (callType === "video") {
@@ -257,33 +232,19 @@ const PatientCallPage = () => {
       localTracksRef.current.forEach((track: any) => track.close());
       await clientRef.current.leave();
 
-      // Calculate call duration
-      const duration = callStartTimeRef.current
-        ? Math.floor(
-            (new Date().getTime() - callStartTimeRef.current.getTime()) / 1000
-          )
-        : 0;
-
-      // Move to call logs and remove from active calls
+      // Calculation of duration not strictly needed for the simplified migration
+      
       if (callId) {
         try {
-          // Add to call logs
-          await addDoc(collection(db, "callLogs"), {
-            patientName: user?.displayName || "Patient",
-            patientEmail: user?.email || "patient@example.com",
-            callType,
-            duration,
-            startTime: callStartTimeRef.current
-              ? new Date(callStartTimeRef.current)
-              : new Date(),
-            endTime: serverTimestamp(),
-            status: "completed",
-          });
+          const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+          const token = tokenMatch ? tokenMatch[1] : null;
 
-          // Remove from active calls
-          await deleteDoc(doc(db, "activeCalls", callId));
+          // Notify backend to end call
+          await axios.put(`${CALL_API}/${callId}`, { status: 'ended' }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
         } catch (error) {
-          console.error("Error updating call logs:", error);
+          console.error("Error ending call on backend:", error);
         }
       }
 
@@ -291,12 +252,12 @@ const PatientCallPage = () => {
       setCallDuration(0);
       setConnectionStatus("Call ended");
 
-      // Redirect back to chat
       setTimeout(() => {
         router.push("/chat");
       }, 1000);
     }
   };
+
 
   const toggleAudio = () => {
     const audioTrack = localTracksRef.current?.[0];
@@ -353,10 +314,10 @@ const PatientCallPage = () => {
               <div>
                 <h2 className="font-semibold">
                   {callType === "video" ? "Video Call" : "Audio Call"} with Dr.
-                  Nitin Mishra
+                  Medical Clinic Doctor
                 </h2>
                 <p className="text-sm text-gray-300">
-                  Dermatologist - MBBS, MD (Skin & VD)
+                  Physician - MD, General Medicine
                 </p>
               </div>
             </div>
@@ -432,7 +393,7 @@ const PatientCallPage = () => {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-gray-300 flex items-center">
                     <Users className="h-4 w-4 mr-2" />
-                    Dr. Nitin Mishra
+                    Medical Clinic Doctor
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -462,7 +423,7 @@ const PatientCallPage = () => {
                   <div className="flex items-center space-x-4">
                     {!joined ? (
                       <Button
-                        onClick={joinCall}
+                        onClick={() => joinCall()}
                         disabled={connecting}
                         className="bg-green-600 hover:bg-green-700 text-white px-8 py-3"
                         size="lg"
@@ -530,7 +491,7 @@ const PatientCallPage = () => {
                 <div className="w-24 h-24 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Phone className="h-12 w-12 text-white" />
                 </div>
-                <CardTitle className="text-xl">Dr. Nitin Mishra</CardTitle>
+                <CardTitle className="text-xl">Medical Clinic Doctor</CardTitle>
                 <p className="text-gray-400">Audio Call Session</p>
                 {joined && (
                   <div className="flex items-center justify-center space-x-2 text-lg font-mono mt-2">
@@ -558,7 +519,7 @@ const PatientCallPage = () => {
                 <div className="flex justify-center space-x-4">
                   {!joined ? (
                     <Button
-                      onClick={joinCall}
+                      onClick={() => joinCall()}
                       disabled={connecting}
                       className="bg-green-600 hover:bg-green-700 text-white px-8 py-3"
                       size="lg"

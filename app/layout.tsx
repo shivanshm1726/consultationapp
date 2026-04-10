@@ -8,8 +8,8 @@ import { DarkModeProvider } from "@/contexts/dark-mode-context"
 import RegisterSW from "@/components/RegisterSW"
 
 export const metadata: Metadata = {
-  title: "Dr. Nitin Mishra - Skin Specialist",
-  description: "Expert dermatological care with 20+ years of experience",
+  title: "HealthCare Clinic - Comprehensive Medical Care",
+  description: "Expert medical care with years of reliable experience",
   generator: "v0.dev",
   manifest: "/manifest.json",
 }

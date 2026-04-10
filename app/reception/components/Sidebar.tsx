@@ -36,7 +36,7 @@ export default function Sidebar() {
                 <StethoscopeIcon className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Dr. Nitin Mishra</h2>
+                <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Medical Clinic Doctor</h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Reception Desk</p>
               </div>
             </div>

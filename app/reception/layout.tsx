@@ -1,24 +1,34 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { admin } from "@/lib/firebase-admin";
 import ReceptionLayout from "./layout.client";
 
 export default async function ReceptionProtectedLayout({ children }: { children: React.ReactNode }) {
-    const token = (await cookies()).get("token")?.value;
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token")?.value;
 
     if (!token) redirect("/login");
 
     try {
-        const decoded = await admin.auth().verifyIdToken(token);
-        const uid = decoded.uid;
+        const response = await fetch("http://localhost:5001/api/auth/profile", {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+            cache: 'no-store'
+        });
 
-        const snap = await admin.firestore().doc(`users/${uid}`).get();
-        const data = snap.data();
+        if (!response.ok) {
+            redirect("/login");
+        }
 
-        if (data?.role !== "receptionist") redirect("/unauthorized");
+        const userData = await response.json();
+        
+        if (userData.role !== "receptionist") {
+            redirect("/unauthorized");
+        }
 
         return <ReceptionLayout>{children}</ReceptionLayout>;
-    } catch {
+    } catch (error) {
+        console.error("Reception layout verification error:", error);
         redirect("/login");
     }
 }

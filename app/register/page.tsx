@@ -302,16 +302,16 @@ export default function RegisterPage() {
             <p className="text-sm text-gray-600 mb-2 dark:text-gray-400">Need help with registration?</p>
             <div className="flex justify-center space-x-4">
               <a
-                href="tel:9258924611"
+                href="tel:+1 (555) 123-4567"
                 className="text-blue-600 hover:text-blue-700 font-medium dark:text-blue-400 dark:hover:text-blue-300"
               >
-                📞 9258924611
+                📞 +1 (555) 123-4567
               </a>
               <a
-                href="mailto:dermanitin@gmail.com"
+                href="mailto:contact@medicalclinic.com"
                 className="text-blue-600 hover:text-blue-700 font-medium dark:text-blue-400 dark:hover:text-blue-300"
               >
-                ✉️ dermanitin@gmail.com
+                ✉️ contact@medicalclinic.com
               </a>
             </div>
           </div>

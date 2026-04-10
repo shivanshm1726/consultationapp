@@ -1,25 +1,45 @@
 import { useEffect, useState } from "react"
-import { doc, onSnapshot, updateDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import axios from "axios"
+
+const SETTINGS_API = "http://localhost:5001/api/settings";
 
 export const useAppointmentStatus = () => {
   const [active, setActive] = useState(true)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, "appointments", "appointmentStatus"), (docSnap) => {
-      if (docSnap.exists()) {
-        setActive(docSnap.data().active)
+  const fetchStatus = async () => {
+    try {
+      const response = await axios.get(`${SETTINGS_API}/appointmentStatus`);
+      if (response.data && response.data.value) {
+        setActive(response.data.value.active)
       }
+    } catch (err) {
+      console.error("Error fetching appointment status:", err)
+    } finally {
       setLoading(false)
-    })
+    }
+  }
 
-    return () => unsub()
+  useEffect(() => {
+    fetchStatus()
+    const interval = setInterval(fetchStatus, 5000)
+    return () => clearInterval(interval)
   }, [])
 
   const toggleStatus = async () => {
-    const ref = doc(db, "appointments", "appointmentStatus")
-    await updateDoc(ref, { active: !active })
+    try {
+      const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+      const token = tokenMatch ? tokenMatch[1] : null;
+
+      await axios.put(`${SETTINGS_API}/appointmentStatus`, { 
+        value: { active: !active } 
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setActive(!active)
+    } catch (err) {
+      console.error("Error toggling appointment status:", err)
+    }
   }
 
   return { active, toggleStatus, loading }

@@ -28,9 +28,9 @@ export default function WhyChooseUs() {
     {
       icon: Award,
       title: "20+ Years of Experience",
-      description: "Two decades of specialized expertise in dermatology, venereology & leprosy treatment",
+      description: "Two decades of specialized expertise in General Practice & Family Medicine treatment",
       details: [
-        "Extensive experience in complex skin conditions",
+        "Extensive experience in complex medical conditions",
         "Thousands of successful treatments",
         "Continuous professional development",
         "Stay updated with latest medical advances",
@@ -39,10 +39,10 @@ export default function WhyChooseUs() {
     {
       icon: GraduationCap,
       title: "MBBS + MD Qualified",
-      description: "Highly qualified with MBBS and MD (Skin & VD) from prestigious medical institutions",
+      description: "Highly qualified with MBBS and MD credentials from prestigious medical institutions",
       details: [
         "MBBS - Bachelor of Medicine and Surgery",
-        "MD (Skin & VD) - Specialized in Dermatology",
+        "MD - Specialized in General Medicine",
         "Certified by Medical Council of India",
         "Regular participation in medical conferences",
       ],
@@ -105,7 +105,7 @@ export default function WhyChooseUs() {
     {
       icon: Star,
       title: "Comprehensive Skin Solutions",
-      description: "Complete range of dermatological services under one roof",
+      description: "Complete range of medical services under one roof",
       details: [
         "Medical dermatology treatments",
         "Cosmetic procedures",
@@ -147,7 +147,7 @@ export default function WhyChooseUs() {
                 </div>
                 <div>
                   <h1 className={`text-lg font-bold ${darkMode ? "text-white" : "text-slate-900"}`}>Why Choose Us</h1>
-                  <p className="text-sm text-indigo-600">Dr. Nitin Mishra</p>
+                  <p className="text-sm text-indigo-600">Medical Clinic Doctor</p>
                 </div>
               </div>
             </div>
@@ -176,11 +176,11 @@ export default function WhyChooseUs() {
         {/* Hero Section */}
         <div className="text-center mb-16">
           <h1 className={`text-4xl md:text-5xl font-bold mb-6 ${darkMode ? "text-white" : "text-slate-900"}`}>
-            Why Choose Dr. Nitin Mishra?
+            Why Choose Medical Clinic Doctor?
           </h1>
           <p className={`text-xl max-w-3xl mx-auto mb-8 ${darkMode ? "text-slate-300" : "text-slate-600"}`}>
-            Experience excellence in dermatological care with a trusted specialist who combines expertise, compassion,
-            and cutting-edge technology to deliver the best possible outcomes for your skin health.
+            Experience excellence in medical care with a trusted specialist who combines expertise, compassion,
+            and cutting-edge technology to deliver the best possible outcomes for your patient health.
           </p>
 
           {/* Stats */}
@@ -249,7 +249,7 @@ export default function WhyChooseUs() {
             <div className="grid md:grid-cols-2 gap-8 items-center">
               <div>
                 <h2 className={`text-3xl font-bold mb-4 ${darkMode ? "text-white" : "text-slate-900"}`}>
-                  Meet Dr. Nitin Mishra
+                  Meet Medical Clinic Doctor
                 </h2>
                 <div className="space-y-4">
                   <div>
@@ -257,21 +257,21 @@ export default function WhyChooseUs() {
                       Specialization
                     </h3>
                     <p className={`${darkMode ? "text-slate-300" : "text-slate-600"}`}>
-                      Dermatology, Venereology & Leprosy
+                      General Practice & Family Medicine
                     </p>
                   </div>
                   <div>
                     <h3 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>
                       Qualifications
                     </h3>
-                    <p className={`${darkMode ? "text-slate-300" : "text-slate-600"}`}>MBBS, MD (Skin & VD)</p>
+                    <p className={`${darkMode ? "text-slate-300" : "text-slate-600"}`}>MD, General Medicine</p>
                   </div>
                   <div>
                     <h3 className={`text-lg font-semibold ${darkMode ? "text-white" : "text-slate-900"}`}>
                       Experience
                     </h3>
                     <p className={`${darkMode ? "text-slate-300" : "text-slate-600"}`}>
-                      20+ years in dermatological practice
+                      20+ years in medical practice
                     </p>
                   </div>
                   <div>
@@ -279,7 +279,7 @@ export default function WhyChooseUs() {
                       Contact
                     </h3>
                     <p className={`${darkMode ? "text-slate-300" : "text-slate-600"}`}>
-                      📞 9258924611 | ✉️ dermanitin@gmail.com
+                      📞 +1 (555) 123-4567 | ✉️ contact@medicalclinic.com
                     </p>
                   </div>
                 </div>
@@ -287,7 +287,7 @@ export default function WhyChooseUs() {
               <div className="text-center">
                 <img
                   src="/doctor.jpg" // Updated with actual image path
-                  alt="Portrait of Dr. Nitin Mishra, Dermatologist"
+                  alt="Portrait of Medical Clinic Doctor, Physician"
                   className="w-64 h-64 rounded-2xl mx-auto shadow-lg"
                   onError={(e) => {
                     e.currentTarget.src = "/placeholder.svg?height=300&width=300" // Fallback image
@@ -309,7 +309,7 @@ export default function WhyChooseUs() {
                 Ready to Experience Expert Care?
               </h2>
               <p className={`mb-6 ${darkMode ? "text-slate-300" : "text-slate-600"}`}>
-                Take the first step towards healthier skin with a consultation from Dr. Nitin Mishra.
+                Take the first step towards healthier skin with a consultation from Medical Clinic Doctor.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link href="/appointment">

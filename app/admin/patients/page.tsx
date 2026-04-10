@@ -5,9 +5,8 @@ import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useAuthState } from "react-firebase-hooks/auth"
-import { collection, query, getDocs, orderBy, onSnapshot } from "firebase/firestore"
-import { auth, db } from "@/lib/firebase"
+import { useAuth } from "@/contexts/auth-context"
+import { useAdminPatients } from "@/hooks/useAdminPatients"
 import {
   Users,
   Search,
@@ -36,107 +35,11 @@ interface Patient {
 const ITEMS_PER_PAGE = 10
 
 export default function PatientsPage() {
-  const [user] = useAuthState(auth)
-  const [patients, setPatients] = useState<Patient[]>([])
+  const { user } = useAuth()
+  const { patients, loading } = useAdminPatients()
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([])
-  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
-
-  useEffect(() => {
-    if (user) {
-      fetchPatients()
-    }
-  }, [user])
-
-  // Real-time snapshot from appointments
-  useEffect(() => {
-    if (!user) return
-
-    const unsubscribe = onSnapshot(
-      query(collection(db, "appointments"), orderBy("createdAt", "desc")),
-      (snapshot) => {
-        const map = new Map<string, Patient>()
-
-        snapshot.docs.forEach((doc) => {
-          const data = doc.data()
-          
-          // Better name extraction
-          let patientName = "Unknown Patient"
-          if (data.firstName && data.lastName) {
-            patientName = `${data.firstName} ${data.lastName}`.trim()
-          } else if (data.firstName) {
-            patientName = data.firstName
-          } else if (data.lastName) {
-            patientName = data.lastName
-          } else if (data.patientName) {
-            patientName = data.patientName
-          } else if (data.name) {
-            patientName = data.name
-          }
-
-          // Better contact extraction
-          let contactNumber = "N/A"
-          if (data.phone) {
-            contactNumber = data.phone
-          } else if (data.phoneNumber) {
-            contactNumber = data.phoneNumber
-          } else if (data.contactNumber) {
-            contactNumber = data.contactNumber
-          } else if (data.mobile) {
-            contactNumber = data.mobile
-          }
-
-          // Better email extraction
-          let email = ""
-          if (data.email) {
-            email = data.email
-          } else if (data.patientEmail) {
-            email = data.patientEmail
-          }
-
-          // Better complaint extraction
-          let chiefComplaint = "Not specified"
-          if (data.symptoms) {
-            chiefComplaint = data.symptoms
-          } else if (data.chiefComplaint) {
-            chiefComplaint = data.chiefComplaint
-          } else if (data.reason) {
-            chiefComplaint = data.reason
-          } else if (data.complaint) {
-            chiefComplaint = data.complaint
-          } else if (data.description) {
-            chiefComplaint = data.description
-          }
-
-          // Use email as primary key, fallback to phone, then doc ID
-          const key = email || contactNumber || doc.id
-
-          if (!map.has(key)) {
-            map.set(key, {
-              id: doc.id,
-              patientName,
-              contactNumber,
-              chiefComplaint,
-              email,
-              age: data.age,
-              gender: data.gender,
-              createdAt: data.createdAt?.toDate() || new Date(),
-            })
-          }
-        })
-
-        setPatients(Array.from(map.values()))
-        setLoading(false)
-      },
-      (error) => {
-        console.error("Error in real-time listener:", error)
-        setLoading(false)
-      }
-    )
-
-    return () => unsubscribe()
-  }, [user])
 
   // Filter logic based on search term
   useEffect(() => {
@@ -156,118 +59,6 @@ export default function PatientsPage() {
     }
     setCurrentPage(1) // Reset to first page when searching
   }, [searchTerm, patients])
-
-  const fetchPatients = async () => {
-    try {
-      setLoading(true)
-
-      // Fetch from chats collection (patient conversations)
-      const chatsQuery = query(collection(db, "chats"), orderBy("createdAt", "desc"))
-      const chatsSnapshot = await getDocs(chatsQuery)
-
-      // Fetch from appointments collection
-      const appointmentsQuery = query(collection(db, "appointments"), orderBy("createdAt", "desc"))
-      const appointmentsSnapshot = await getDocs(appointmentsQuery)
-
-      const patientsMap = new Map<string, Patient>()
-
-      // Process chats data
-      chatsSnapshot.docs.forEach((doc) => {
-        const data = doc.data()
-        
-        let email = data.patientEmail || data.userEmail || data.email || ""
-        let patientName = data.patientName || data.userName || "Unknown Patient"
-        let contactNumber = data.phoneNumber || data.contactNumber || data.phone || "N/A"
-        let chiefComplaint = data.chiefComplaint || data.message || "General consultation"
-
-        if (email && !patientsMap.has(email)) {
-          patientsMap.set(email, {
-            id: doc.id,
-            patientName,
-            contactNumber,
-            chiefComplaint,
-            email,
-            createdAt: data.createdAt?.toDate() || new Date(),
-          })
-        }
-      })
-
-      // Process appointments data with better field mapping
-      appointmentsSnapshot.docs.forEach((doc) => {
-        const data = doc.data()
-        
-        // Better name extraction
-        let patientName = "Unknown Patient"
-        if (data.firstName && data.lastName) {
-          patientName = `${data.firstName} ${data.lastName}`.trim()
-        } else if (data.firstName) {
-          patientName = data.firstName
-        } else if (data.lastName) {
-          patientName = data.lastName
-        } else if (data.patientName) {
-          patientName = data.patientName
-        } else if (data.name) {
-          patientName = data.name
-        }
-
-        // Better contact extraction
-        let contactNumber = "N/A"
-        if (data.phone) {
-          contactNumber = data.phone
-        } else if (data.phoneNumber) {
-          contactNumber = data.phoneNumber
-        } else if (data.contactNumber) {
-          contactNumber = data.contactNumber
-        } else if (data.mobile) {
-          contactNumber = data.mobile
-        }
-
-        // Better email extraction
-        let email = ""
-        if (data.email) {
-          email = data.email
-        } else if (data.patientEmail) {
-          email = data.patientEmail
-        }
-
-        // Better complaint extraction
-        let chiefComplaint = "Not specified"
-        if (data.symptoms) {
-          chiefComplaint = data.symptoms
-        } else if (data.chiefComplaint) {
-          chiefComplaint = data.chiefComplaint
-        } else if (data.reason) {
-          chiefComplaint = data.reason
-        } else if (data.complaint) {
-          chiefComplaint = data.complaint
-        } else if (data.description) {
-          chiefComplaint = data.description
-        }
-
-        const key = email || contactNumber || doc.id
-
-        if (!patientsMap.has(key)) {
-          patientsMap.set(key, {
-            id: doc.id,
-            patientName,
-            contactNumber,
-            chiefComplaint,
-            email,
-            age: data.age,
-            gender: data.gender,
-            createdAt: data.createdAt?.toDate() || new Date(),
-          })
-        }
-      })
-
-      const patientsData = Array.from(patientsMap.values())
-      setPatients(patientsData)
-    } catch (error) {
-      console.error("Error fetching patients:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   // Pagination logic
   const totalPages = Math.ceil(filteredPatients.length / ITEMS_PER_PAGE)

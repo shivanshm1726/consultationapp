@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { useAuth } from "@/contexts/auth-context";
+import axios from "axios";
 import { Phone, Video, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -14,12 +13,14 @@ interface CallInitiatorProps {
   urgency?: "low" | "medium" | "high";
 }
 
+const CALLS_API = "http://localhost:5001/api/calls";
+
 export function CallInitiator({
   patientName = "Anonymous Patient",
   patientEmail = "patient@example.com",
   urgency = "medium",
 }: CallInitiatorProps) {
-  const [user] = useAuthState(auth);
+  const { user, userData } = useAuth();
   const [initiating, setInitiating] = useState<string | null>(null);
   const router = useRouter();
 
@@ -29,32 +30,29 @@ export function CallInitiator({
     setInitiating(callType);
 
     try {
-      // Generate unique channel name
-      const patientUid = user.uid;
-      const doctorEmail = process.env.NEXT_PUBLIC_DOCTOR_EMAIL!
-      const channelName = `${doctorEmail}_${patientUid}`;
+      const doctorEmail = process.env.NEXT_PUBLIC_DOCTOR_EMAIL! || "contact@medicalclinic.com";
+      const channelName = `${doctorEmail}_${user.email}`;
 
-      // Create active call document
-      const callDoc = await addDoc(collection(db, "activeCalls"), {
-        patientName: user.displayName || patientName,
-        patientEmail: user.email || patientEmail,
-        patientPhone: user.phoneNumber || "",
+      const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+      const token = tokenMatch ? tokenMatch[1] : null;
+
+      const response = await axios.post(CALLS_API, {
+        patientName: userData?.fullName || patientName,
+        patientEmail: user.email,
+        patientPhone: userData?.phone || "",
         callType,
-        status: "waiting",
-        createdAt: serverTimestamp(),
         channelName,
         urgency,
-        patientUid: user.uid,
-        doctorEmail,
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
 
-      // Navigate to call interface
       router.push(
-        `/call?channel=${channelName}&type=${callType}&callId=${callDoc.id}`
+        `/call?channel=${channelName}&type=${callType}&callId=${response.data._id}`
       );
     } catch (error) {
       console.error("Error initiating call:", error);
-      alert("Failed to initiate call. Please try again.");
+      alert("Failed to initiate call.");
     } finally {
       setInitiating(null);
     }

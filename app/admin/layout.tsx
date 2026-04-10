@@ -1,22 +1,34 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { admin } from "@/lib/firebase-admin";
 import DoctorLayout from "./layout.client";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-    const token = (await cookies()).get("token")?.value;
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token")?.value;
 
     if (!token) redirect("/login");
 
     try {
-        const decoded = await admin.auth().verifyIdToken(token);
-        const uid = decoded.uid;
-        const snap = await admin.firestore().doc(`users/${uid}`).get();
-        const data = snap.data();
-        if (data?.role !== "admin") redirect("/unauthorized");
+        const response = await fetch("http://localhost:5001/api/auth/profile", {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+            cache: 'no-store'
+        });
+
+        if (!response.ok) {
+            redirect("/login");
+        }
+
+        const userData = await response.json();
+        
+        if (userData.role !== "admin") {
+            redirect("/unauthorized");
+        }
 
         return <DoctorLayout>{children}</DoctorLayout>;
-    } catch {
+    } catch (error) {
+        console.error("Admin layout verification error:", error);
         redirect("/login");
     }
 }

@@ -8,7 +8,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { serverTimestamp } from "firebase/firestore";
+import { usePatients } from "@/hooks/usePatients";
+import { logoutUser } from "@/lib/auth";
 import {
   Clock,
   MapPin,
@@ -29,17 +30,6 @@ import {
   User,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
-import { logoutUser } from "@/lib/auth";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  addDoc,
-  doc,
-  getDoc,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
 
 interface PatientType {
   id: string;
@@ -66,9 +56,15 @@ export default function HomePage() {
 
   const { user, userData, loading } = useAuth();
   const [checkingRedirect, setCheckingRedirect] = useState(true);
-  const [linkedPatients, setLinkedPatients] = useState<PatientType[]>([]);
+  
+  // Use pure functional hook for authentication
+  const { linkedPatients, activePatient, addPatient, selectPatient } = usePatients(
+    user?.email || "", 
+    userData?.phone || "", 
+    user?.uid || ""
+  );
+
   const [showPatientPanel, setShowPatientPanel] = useState(false);
-  const [activePatient, setActivePatient] = useState<PatientType | null>(null);
   const [showAddPatientForm, setShowAddPatientForm] = useState(false);
   const [newPatientData, setNewPatientData] = useState({
     firstName: "",
@@ -105,89 +101,7 @@ export default function HomePage() {
     }
   }, [user, userData, loading, router]);
 
-  useEffect(() => {
-    const fetchPatients = async () => {
-      if (!user) {
-        setLinkedPatients([]);
-        setActivePatient(null);
-        return;
-      }
-
-      try {
-        const patientsRef = collection(db, "patients");
-        const q = query(
-          patientsRef,
-          where("linkedTo", "==", user.email || user.phoneNumber)
-        );
-        const querySnapshot = await getDocs(q);
-
-        const patientList = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-
-        // Fetch logged-in user profile from "users" collection
-        const userDocRef = doc(db, "users", user.uid);
-        const userSnap = await getDoc(userDocRef);
-
-        let currentUserPatient = null;
-
-        if (userSnap.exists()) {
-          const data = userSnap.data();
-          currentUserPatient = {
-            id: user.uid,
-            firstName: data.fullName?.split(" ")[0] || "",
-            lastName: data.fullName?.split(" ")[1] || "",
-            phone: data.phone || "",
-            email: data.email || "",
-            age: data.age || 0,
-            gender: data.gender || "",
-            linkedTo: data.email || "",
-            createdAt: data.createdAt || null,
-            patientUid: user.uid,
-          };
-        }
-
-        // Merge and filter duplicates
-        const mergedList = [currentUserPatient, ...patientList].filter(
-          (p, index, self): p is PatientType =>
-            p !== null && self.findIndex((x) => x?.id === p.id) === index
-        );
-
-        setLinkedPatients(mergedList);
-
-        // Auto-select current user's own profile as default
-        if (currentUserPatient) {
-          setActivePatient(currentUserPatient);
-        }
-
-        // Check for active patient in localStorage
-        const activePatientId = localStorage.getItem("activePatientId");
-        if (activePatientId) {
-          const activePatientData = mergedList.find(
-            (p) => p.id === activePatientId
-          );
-          if (activePatientData) {
-            setActivePatient(activePatientData);
-          }
-        } else if (mergedList.length === 1) {
-          // Auto-select if only one patient
-          setActivePatient(mergedList[0]);
-          localStorage.setItem("activePatientId", mergedList[0].id);
-        }
-      } catch (error) {
-        console.error("Failed to fetch patients:", error);
-      }
-    };
-
-    fetchPatients();
-  }, [user]);
-
   // Early return after all hooks are called
-  if (!user) {
-    return null;
-  }
-
   if (checkingRedirect || loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -219,10 +133,8 @@ export default function HomePage() {
   };
 
   const handleSelectPatient = (patient: PatientType) => {
-    setActivePatient(patient);
-    localStorage.setItem("activePatientId", patient.id);
+    selectPatient(patient);
     setShowPatientPanel(false);
-    // You can add any additional logic here to update the UI based on selected patient
   };
 
   const handleAddPatient = async () => {
@@ -231,25 +143,10 @@ export default function HomePage() {
     try {
       const newPatient = {
         ...newPatientData,
-        age: Number(newPatientData.age), // just in case it's a string
+        age: Number(newPatientData.age),
       };
 
-      const docRef = await addDoc(collection(db, "patients"), {
-        ...newPatient,
-        linkedTo: user.email || user.phoneNumber,
-        createdAt: serverTimestamp(),
-        patientUid: user.uid,
-      });
-
-      const newEntry: PatientType = {
-        id: docRef.id,
-        ...newPatient,
-        linkedTo: user.email || user.phoneNumber,
-        createdAt: new Date(), // For UI, not Firestore
-        patientUid: user.uid,
-      };
-
-      setLinkedPatients((prev) => [...prev, newEntry]);
+      await addPatient(newPatient);
 
       setNewPatientData({
         firstName: "",
@@ -278,45 +175,45 @@ export default function HomePage() {
   // Update the services array with image URLs
   const services = [
     {
-      title: "Laser Hair Removal",
+      title: "General Checkup",
       description:
-        "In Our Clinic, We use the latest laser machine which uses state-of-the-art to remove unwanted hair and with greater speed and comfort than other methods. Each laser pulse can treat multiple hairs in a fraction of a second, making treatments quick.",
-      icon: "✨",
-      image: "/laserhairremoval.jpg",
+        "Comprehensive health evaluations including vitals monitoring, routine physicals, and preventative health screenings for patients of all ages.",
+      icon: "🩺",
+      image: "/laserhairremoval.jpg", 
     },
     {
-      title: "Chemical Peeling",
+      title: "Pediatrics",
       description:
-        "Chemical peels is best method for skin tightening and skin whitening. Chemical peels uses a chemical solution to improve and smooth the texture of the facial skin by removing its damaged outer layer, recovery varies by peel depth.",
-      icon: "🧴",
+        "Specialized care for infants, children, and adolescents. From routine vaccinations to developmental assessments and acute illness treatment.",
+      icon: "👶",
       image: "/chemicalpeeling.jpg",
     },
     {
-      title: "Vitiligo Surgery",
+      title: "Diagnostics & Labs",
       description:
-        "Vitiligo is a chronic skin disorder that causes areas of skin to lose colour. It presents as depigmented (white) patches. The goal of vitiligo surgery is to achieve Cultured and Non Cultured Melanocyte Transfer, Blister Grafting, Punch Grafting, Split Thickness etc.",
-      icon: "🏥",
+        "On-site laboratory services providing quick and accurate results for blood work, cultures, and other essential diagnostic tests.",
+      icon: "🔬",
       image: "/vitiligo.jpg",
     },
     {
-      title: "Electro Surgery",
+      title: "Specialized Surgery",
       description:
-        "Electro surgery refers to the cutting and coagulation of tissue using high-frequency electrical current. In addition, they should understand the mechanism of action, recovery time varies depending on the size and depth of the treated area",
-      icon: "⚡",
+        "Advanced outpatient surgical procedures utilizing state-of-the-art equipment to ensure patient safety and rapid recovery.",
+      icon: "🏥",
       image: "/electrosurgery.jpeg",
     },
     {
-      title: "Radio Frequency Surgery",
+      title: "Cardiology",
       description:
-        "At Our Clinic, all these problems can be cured in one sitting with the help of latest and innovative RADIO FREQUENCY MACHINE. This machine removes the unwanted mole, skin tags, sun spots, warts without any scarring and with no or very minimal bleeding.",
-      icon: "📡",
+        "Comprehensive heart health services including ECGs, stress tests, and personalized cardiovascular disease management.",
+      icon: "❤️",
       image: "/radiofrequency.jpeg",
     },
     {
-      title: "Acne Surgery",
+      title: "Emergency Care",
       description:
-        "Acne or pimples is a common teenage problem. Medically acne problem is categorized into active acne (comedons, white heads, black heads), acne pigment (red, brown and black) and acne scars (atrophic, hypertrophic and ice-pick).",
-      icon: "🎯",
+        "Immediate medical attention for acute injuries and sudden illnesses, supported by our experienced trauma-ready staff.",
+      icon: "🚑",
       image: "/acnesurgery.jpeg",
     },
   ];
@@ -358,9 +255,9 @@ export default function HomePage() {
                     darkMode ? "text-white" : "text-gray-900"
                   }`}
                 >
-                  Dr. Nitin Mishra
+                  Medical Clinic
                 </h1>
-                <p className="text-sm text-indigo-600">Skin Specialist</p>
+                <p className="text-sm text-indigo-600">General Practice</p>
               </div>
             </div>
 
@@ -599,9 +496,9 @@ export default function HomePage() {
                     darkMode ? "text-white" : "text-gray-900"
                   }`}
                 >
-                  Expert Skin Care with{" "}
+                  Expert Medical Care at{" "}
                   <span className="bg-gradient-to-r from-indigo-600 to-teal-600 bg-clip-text text-transparent">
-                    Dr. Nitin Mishra
+                    Medical Clinic
                   </span>
                 </h1>
                 <p
@@ -609,12 +506,10 @@ export default function HomePage() {
                     darkMode ? "text-gray-300" : "text-gray-600"
                   }`}
                 >
-                  MBBS, MD (Skin & VD) -{" "}
                   <span className="font-bold">
-                    Specialist in Dermatology, Venereology & Leprosy
+                    Specialists in General Health & Wellness
                   </span>
-                  . Advanced treatments for all skin conditions with 20 years of
-                  expertise.
+                  . Comprehensive treatments and consultations for all your medical needs with decades of expertise.
                 </p>
 
                 {/* Patient-specific welcome message */}
@@ -710,7 +605,7 @@ export default function HomePage() {
                   <div className="bg-white rounded-2xl p-1 shadow-inner">
                     <img
                       src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/doctor-award.jpg-lTIEbH4xBAMehhJONWbfhUwLiYMMRz.jpeg"
-                      alt="Dr. Nitin Mishra receiving professional recognition"
+                      alt="Clinic receiving professional recognition"
                       className="rounded-xl w-full max-w-md mx-auto object-cover shadow-lg group-hover:scale-[1.02] transition-transform duration-300"
                       style={{
                         aspectRatio: "4/3",
@@ -731,10 +626,10 @@ export default function HomePage() {
                         Certified & Licensed
                       </div>
                       <div className="text-indigo-600 font-semibold text-base">
-                        MD (Skin & VD)
+                        Expert Practitioners
                       </div>
                       <div className="text-sm mt-1">
-                        Board Certified Dermatologist
+                        Board Certified Physicians
                       </div>
                     </div>
                   </div>
@@ -829,7 +724,7 @@ export default function HomePage() {
                   darkMode ? "text-gray-400" : "text-gray-600"
                 }`}
               >
-                Call 9258924611 or book online instantly
+                Call +1 (555) 123-4567 or book online instantly
               </p>
             </div>
           </div>
@@ -848,14 +743,14 @@ export default function HomePage() {
                 darkMode ? "text-white" : "text-gray-900"
               }`}
             >
-              Reasons to Trust Dr. Nitin Mishra
+              Reasons to Trust Medical Clinic
             </h2>
             <p
               className={`text-xl max-w-2xl mx-auto mb-8 ${
                 darkMode ? "text-gray-400" : "text-gray-600"
               }`}
             >
-              Experience, expertise, and personalized care for your skin health
+              Experience, expertise, and personalized care for your comprehensive health
             </p>
             <Button
               onClick={() => setShowServices(!showServices)}
@@ -1021,7 +916,7 @@ export default function HomePage() {
                 darkMode ? "text-gray-400" : "text-gray-600"
               }`}
             >
-              Visit us at either of our convenient locations in Bareilly
+              Visit us at either of our convenient locations in the City Center
             </p>
           </div>
 
@@ -1043,7 +938,7 @@ export default function HomePage() {
                       darkMode ? "text-white" : "text-gray-900"
                     }`}
                   >
-                    Rampur Garden Clinic
+                    North Branch Clinic
                   </h3>
                   <p
                     className={`${
@@ -1082,7 +977,7 @@ export default function HomePage() {
                       darkMode ? "text-gray-400" : "text-gray-600"
                     }`}
                   >
-                    9258924611
+                    +1 (555) 123-4567
                   </span>
                 </div>
               </div>
@@ -1105,7 +1000,7 @@ export default function HomePage() {
                       darkMode ? "text-white" : "text-gray-900"
                     }`}
                   >
-                    DD Puram Clinic
+                    South Branch Clinic
                   </h3>
                   <p
                     className={`${
@@ -1144,7 +1039,7 @@ export default function HomePage() {
                       darkMode ? "text-gray-400" : "text-gray-600"
                     }`}
                   >
-                    9258924611
+                    +1 (555) 123-4567
                   </span>
                 </div>
               </div>
@@ -1160,7 +1055,7 @@ export default function HomePage() {
             Ready to Transform Your Skin?
           </h2>
           <p className="text-xl mb-8 text-indigo-100 max-w-2xl mx-auto">
-            Book your consultation with Dr. Nitin Mishra today and take the
+            Book your consultation today and take the
             first step towards healthier, beautiful skin
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -1186,11 +1081,11 @@ export default function HomePage() {
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center space-y-2 sm:space-y-0 sm:space-x-6">
             <div className="flex items-center space-x-2">
               <Phone className="h-5 w-5" />
-              <span className="text-lg font-medium">9258924611</span>
+              <span className="text-lg font-medium">+1 (555) 123-4567</span>
             </div>
             <div className="flex items-center space-x-2">
               <Mail className="h-5 w-5" />
-              <span>dermanitin@gmail.com</span>
+              <span>contact@medicalclinic.com</span>
             </div>
           </div>
         </div>
@@ -1209,15 +1104,15 @@ export default function HomePage() {
                 <div className="w-10 h-10 bg-gradient-to-r from-indigo-600 to-teal-600 rounded-lg flex items-center justify-center">
                   <Stethoscope className="h-5 w-5 text-white" />
                 </div>
-                <span className="text-xl font-bold">Dr. Nitin Mishra</span>
+                <span className="text-xl font-bold">Medical Clinic</span>
               </div>
               <p className="text-gray-400 mb-4">
-                Expert dermatologist with 20+ years of experience in advanced
+                Expert physician with 20+ years of experience in advanced
                 skin treatments and care.
               </p>
               <div className="flex space-x-4">
                 <Phone className="h-5 w-5 text-gray-400" />
-                <span className="text-gray-400">9258924611</span>
+                <span className="text-gray-400">+1 (555) 123-4567</span>
               </div>
             </div>
 
@@ -1273,13 +1168,13 @@ export default function HomePage() {
                 <div className="flex items-start space-x-2">
                   <MapPin className="h-5 w-5 mt-0.5" />
                   <div>
-                    <div>Rampur Garden, Bareilly</div>
-                    <div>DD Puram, Bareilly</div>
+                    <div>City Center Branch</div>
+                    <div>North Branch</div>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Mail className="h-5 w-5" />
-                  <span>dermanitin@gmail.com</span>
+                  <span>contact@medicalclinic.com</span>
                 </div>
               </div>
             </div>
@@ -1287,7 +1182,7 @@ export default function HomePage() {
 
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
             <p>
-              &copy; 2025 Dr. Nitin Mishra - Skin Specialist. All rights
+              &copy; 2025 Medical Clinic. All rights
               reserved.
             </p>
           </div>

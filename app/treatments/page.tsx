@@ -192,7 +192,7 @@ export default function TreatmentsPage() {
                 </div>
                 <div>
                   <h1 className={`text-lg font-bold ${darkMode ? "text-white" : "text-slate-900"}`}>Our Treatments</h1>
-                  <p className="text-sm text-indigo-600">Dr. Nitin Mishra</p>
+                  <p className="text-sm text-indigo-600">Medical Clinic Doctor</p>
                 </div>
               </div>
             </div>
@@ -215,13 +215,13 @@ export default function TreatmentsPage() {
         {/* Page Header */}
         <div className="text-center mb-12">
           <h1 className={`text-4xl md:text-5xl font-bold mb-4 ${darkMode ? "text-white" : "text-slate-900"}`}>
-            Advanced Dermatological Treatments
+            Advanced medical Treatments
           </h1>
           <p className={`text-xl max-w-3xl mx-auto ${darkMode ? "text-slate-300" : "text-slate-600"}`}>
-            Comprehensive skin care solutions with 20+ years of expertise in dermatology, venereology & leprosy
+            Comprehensive skin care solutions with 20+ years of expertise in General Practice & Family Medicine
           </p>
           <Badge className="mt-4 bg-indigo-100 text-indigo-800 border-indigo-200">
-            All treatments performed by Dr. Nitin Mishra (MBBS, MD)
+            All treatments performed by Medical Clinic Doctor (MBBS, MD)
           </Badge>
         </div>
 
@@ -315,7 +315,7 @@ export default function TreatmentsPage() {
 
                         <div className="bg-indigo-50 p-4 rounded-lg">
                           <p className="text-sm text-indigo-800">
-                            <strong>Note:</strong> Individual results may vary. A consultation with Dr. Nitin Mishra is
+                            <strong>Note:</strong> Individual results may vary. A consultation with Medical Clinic Doctor is
                             recommended to determine the best treatment plan for your specific condition.
                           </p>
                         </div>
@@ -347,7 +347,7 @@ export default function TreatmentsPage() {
                 Need a Consultation?
               </h2>
               <p className={`mb-6 ${darkMode ? "text-slate-300" : "text-slate-600"}`}>
-                Schedule a consultation with Dr. Nitin Mishra to discuss the best treatment options for your skin
+                Schedule a consultation with Medical Clinic Doctor to discuss the best treatment options for your skin
                 concerns.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -366,7 +366,7 @@ export default function TreatmentsPage() {
                 </Link>
               </div>
               <div className="mt-4 text-sm text-indigo-600">
-                <p>📞 9258924611 | ✉️ dermanitin@gmail.com</p>
+                <p>📞 +1 (555) 123-4567 | ✉️ contact@medicalclinic.com</p>
               </div>
             </CardContent>
           </Card>

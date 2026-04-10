@@ -5,21 +5,12 @@ import { motion } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { useAuthState } from "react-firebase-hooks/auth"
-import {
-  collection,
-  query,
-  onSnapshot,
-  doc,
-  updateDoc,
-  addDoc,
-  deleteDoc,
-  serverTimestamp,
-  orderBy,
-} from "firebase/firestore"
-import { auth, db } from "@/lib/firebase"
+import { useAuth } from "@/contexts/auth-context"
+import axios from "axios"
 import { Phone, Video, Clock, User, PhoneCall, History, AlertCircle, CheckCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
+
+const CALLS_API = "http://localhost:5001/api/calls";
 
 interface ActiveCall {
   id: string
@@ -28,95 +19,90 @@ interface ActiveCall {
   patientPhone?: string
   callType: "audio" | "video"
   status: "waiting" | "connected" | "ended"
-  createdAt: any
+  createdAt: string
   channelName: string
   urgency?: "low" | "medium" | "high"
-  patientUid: string
 }
 
 interface CallLog {
   id: string
   patientName: string
   patientEmail: string
-  patientUid: string
   callType: "audio" | "video"
   duration: number
-  startTime: any
-  endTime: any
+  startTime: string
+  endTime: string
   status: "completed" | "missed" | "cancelled"
 }
 
 export default function CallsPage() {
-  const [user] = useAuthState(auth)
+  const { user } = useAuth()
   const [activeCalls, setActiveCalls] = useState<ActiveCall[]>([])
   const [callLogs, setCallLogs] = useState<CallLog[]>([])
   const [loading, setLoading] = useState(true)
   const [showLogs, setShowLogs] = useState(false)
   const router = useRouter()
 
+  const fetchCalls = async () => {
+    try {
+      const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+      const token = tokenMatch ? tokenMatch[1] : null;
+
+      const response = await axios.get(CALLS_API, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      const calls = response.data.map((c: any) => ({
+        id: c._id,
+        patientName: c.patientName,
+        patientEmail: c.patientEmail,
+        callType: c.callType,
+        status: c.status,
+        createdAt: c.createdAt,
+        channelName: c.channelName,
+        urgency: c.urgency || "low"
+      }));
+
+      setActiveCalls(calls.filter((c: any) => c.status !== 'ended'))
+    } catch (err) {
+      console.error("Error fetching calls:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (!user) return
-
-    // Listen to active calls
-    const activeCallsQuery = query(collection(db, "activeCalls"), orderBy("createdAt", "desc"))
-
-    const unsubscribeActiveCalls = onSnapshot(activeCallsQuery, (snapshot) => {
-      const calls: ActiveCall[] = []
-      snapshot.forEach((doc) => {
-        calls.push({ id: doc.id, ...doc.data() } as ActiveCall)
-      })
-      setActiveCalls(calls)
-      setLoading(false)
-    })
-
-    // Listen to call logs
-    const callLogsQuery = query(collection(db, "callLogs"), orderBy("startTime", "desc"))
-
-    const unsubscribeCallLogs = onSnapshot(callLogsQuery, (snapshot) => {
-      const logs: CallLog[] = []
-      snapshot.forEach((doc) => {
-        logs.push({ id: doc.id, ...doc.data() } as CallLog)
-      })
-      setCallLogs(logs)
-    })
-
-    return () => {
-      unsubscribeActiveCalls()
-      unsubscribeCallLogs()
-    }
+    fetchCalls()
+    const interval = setInterval(fetchCalls, 5000)
+    return () => clearInterval(interval)
   }, [user])
 
   const joinCall = async (call: ActiveCall) => {
     try {
-      // Update call status to connected
-      await updateDoc(doc(db, "activeCalls", call.id), {
-        status: "connected",
-        doctorJoinedAt: serverTimestamp(),
-      })
+      const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+      const token = tokenMatch ? tokenMatch[1] : null;
 
-      // Navigate to call interface
+      await axios.put(`${CALLS_API}/${call.id}`, { status: "connected" }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
       router.push(`/admin/call?channel=${call.channelName}&type=${call.callType}&callId=${call.id}`)
     } catch (error) {
       console.error("Error joining call:", error)
-      alert("Failed to join call. Please try again.")
+      alert("Failed to join call.")
     }
   }
 
   const endCall = async (call: ActiveCall) => {
     try {
-      // Move to call logs
-      await addDoc(collection(db, "callLogs"), {
-        patientName: call.patientName,
-        patientUid: call.patientUid,
-        callType: call.callType,
-        duration: 0,
-        startTime: call.createdAt,
-        endTime: serverTimestamp(),
-        status: "cancelled",
-      })
+      const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+      const token = tokenMatch ? tokenMatch[1] : null;
 
-      // Remove from active calls
-      await deleteDoc(doc(db, "activeCalls", call.id))
+      await axios.put(`${CALLS_API}/${call.id}`, { status: "ended" }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchCalls()
     } catch (error) {
       console.error("Error ending call:", error)
     }
@@ -163,7 +149,6 @@ export default function CallsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
@@ -199,7 +184,6 @@ export default function CallsPage() {
       </div>
 
       {!showLogs ? (
-        // Active Calls View
         <div className="space-y-4">
           {activeCalls.length === 0 ? (
             <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
@@ -236,11 +220,11 @@ export default function CallsPage() {
                             <div className="flex items-center space-x-4 text-sm text-slate-600 dark:text-slate-400">
                               <span className="flex items-center space-x-1">
                                 <User className="h-4 w-4" />
-                                <span>{call.patientUid}</span>
+                                <span>{call.patientEmail}</span>
                               </span>
                               <span className="flex items-center space-x-1">
                                 <Clock className="h-4 w-4" />
-                                <span>{call.createdAt?.toDate?.()?.toLocaleTimeString() || "Just now"}</span>
+                                <span>{new Date(call.createdAt).toLocaleTimeString()}</span>
                               </span>
                             </div>
                           </div>
@@ -309,71 +293,14 @@ export default function CallsPage() {
           )}
         </div>
       ) : (
-        // Call Logs View
         <div className="space-y-4">
-          {callLogs.length === 0 ? (
-            <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
-              <CardContent className="p-12 text-center">
-                <History className="h-16 w-16 text-slate-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">No Call History</h3>
-                <p className="text-slate-600 dark:text-slate-400">Your completed calls will appear here.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {callLogs.map((log, index) => (
-                <motion.div
-                  key={log.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                >
-                  <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              log.callType === "video" ? "bg-blue-100 text-blue-600" : "bg-green-100 text-green-600"
-                            }`}
-                          >
-                            {log.callType === "video" ? <Video className="h-5 w-5" /> : <Phone className="h-5 w-5" />}
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-slate-900 dark:text-white">{log.patientName}</h3>
-                            <div className="flex items-center space-x-4 text-sm text-slate-600 dark:text-slate-400">
-                              <span>{log.patientEmail}</span>
-                              <span>
-                                {log.startTime?.toDate?.()?.toLocaleDateString()} at{" "}
-                                {log.startTime?.toDate?.()?.toLocaleTimeString()}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center space-x-3">
-                          <Badge
-                            variant={
-                              log.status === "completed"
-                                ? "default"
-                                : log.status === "missed"
-                                  ? "destructive"
-                                  : "secondary"
-                            }
-                          >
-                            {log.status.toUpperCase()}
-                          </Badge>
-                          <span className="text-sm text-slate-600 dark:text-slate-400">
-                            {log.duration > 0 ? formatDuration(log.duration) : "0:00"}
-                          </span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          )}
+          <Card className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm">
+            <CardContent className="p-12 text-center">
+              <History className="h-16 w-16 text-slate-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">No Call History</h3>
+              <p className="text-slate-600 dark:text-slate-400">Your completed calls will appear here.</p>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

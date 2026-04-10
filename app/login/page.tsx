@@ -1,8 +1,6 @@
 "use client"
 import { useDarkMode } from "@/contexts/dark-mode-context";
 import { Sun, Moon } from "lucide-react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import type React from "react";
 import { useState } from "react";
 import Link from "next/link";
@@ -14,20 +12,21 @@ import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Mail, Lock } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect } from "react";
-import { ArrowLeft, User, Stethoscope, HeartPulse, Smartphone, CalendarCheck } from "lucide-react";
+import { ArrowLeft, User, Stethoscope, HeartPulse, Smartphone, CalendarCheck, Shield, Heart } from "lucide-react";
 import { loginUser } from "@/lib/auth";
 import { useAuth } from "@/contexts/auth-context";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useInView } from "react-intersection-observer";
 
+type PortalType = "patient" | "doctor" | "assistant" | null;
+
 export default function Login() {
+  const [selectedPortal, setSelectedPortal] = useState<PortalType>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const { theme, setTheme } = useTheme();
   const router = useRouter();
-  const { user } = useAuth();
   const { darkMode, toggleDarkMode } = useDarkMode();
 
   const [ref, inView] = useInView({
@@ -62,350 +61,250 @@ export default function Login() {
     setError("");
 
     try {
-      const userCredential = await loginUser(formData.email, formData.password);
-      const user = userCredential;
-      const token = await user.getIdToken();
-      await fetch("/api/setToken", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ token }),
-      });
+      const userData = await loginUser(formData.email, formData.password);
+      
+      const role = userData.role || "patient";
+      localStorage.setItem("role", role);
 
-      const ADMIN_EMAIL = process.env.NEXT_PUBLIC_ADMIN_EMAIL || "drnitinmishraderma@gmail.com";
-      if (user.email === ADMIN_EMAIL) {
-        router.push("/admin");
+      // Verify they selected the correct portal for their role
+      if (selectedPortal === "doctor" && role !== "admin" && role !== "superadmin") {
+        throw new Error("Unauthorized: Admin access required.");
+      }
+      if (selectedPortal === "assistant" && role !== "receptionist") {
+        throw new Error("Unauthorized: Assistant access required. Please use Patient Portal.");
+      }
+      if (selectedPortal === "patient" && (role === "admin" || role === "receptionist")) {
+        // Automatically route staff correctly if they use the patient portal by accident
+        if (role === "admin") router.push("/admin");
+        if (role === "receptionist") router.push("/reception");
         return;
       }
 
-      const docRef = doc(db, "users", user.uid);
-      const docSnap = await getDoc(docRef);
-
-      if (!docSnap.exists()) {
-        throw new Error("User profile not found in Firestore");
-      }
-
-      const userData = docSnap.data();
-      const role = userData.role;
-      localStorage.setItem("role", role);
-
-      if (role === "receptionist") {
+      if (role === "admin") {
+        router.push("/admin");
+      } else if (role === "superadmin") {
+        router.push("/superadmin");
+      } else if (role === "receptionist") {
         router.push("/reception");
       } else {
         router.push("/");
       }
     } catch (error: any) {
-      let message = "Login failed. Please check your credentials.";
-
-      if (error.code === "auth/invalid-credential" || error.code === "auth/wrong-password") {
-        message = "Invalid email or password.";
-      } else if (error.code === "auth/user-not-found") {
-        message = "User not found. Please check your email.";
-      } else if (error.code === "auth/too-many-requests") {
-        message = "Too many login attempts. Please try again later.";
-      }
-
-      setError(message);
+      setError(error.message || "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Animation variants
   const containerVariants = {
     hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-      },
-    },
+    visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
   };
 
   const itemVariants = {
     hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: {
-        duration: 0.5,
-      },
+    visible: { y: 0, opacity: 1, transition: { duration: 0.5 } },
+  };
+
+  const portalConfig = {
+    patient: {
+      title: "Patient Portal",
+      desc: "Access your health records and appointments",
+      icon: <User className="h-6 w-6" />,
+      color: "from-blue-600 to-teal-500"
     },
+    doctor: {
+      title: "Doctor Portal",
+      desc: "Manage patients, access live consultations",
+      icon: <Stethoscope className="h-6 w-6" />,
+      color: "from-indigo-600 to-purple-600"
+    },
+    assistant: {
+      title: "Assistant Portal",
+      desc: "Manage clinic bookings and triage patients",
+      icon: <Shield className="h-6 w-6" />,
+      color: "from-emerald-500 to-teal-600"
+    }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
-      {/* Animated Header */}
       <motion.header
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
         className="bg-white/90 backdrop-blur-md shadow-sm border-b dark:bg-slate-800/90 dark:border-slate-700"
       >
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <motion.div
-              initial={{ x: -20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="flex items-center space-x-4"
-            >
-              <Link href="/">
-                <Button variant="ghost" size="sm" className="group hover:bg-blue-50 dark:hover:bg-slate-700">
-                  <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
-                  Back to Home
-                </Button>
-              </Link>
-              <div className="flex items-center space-x-3">
-                <motion.div
-                  animate={{
-                    rotate: [0, 10, 0],
-                    transition: { repeat: Infinity, duration: 3 }
-                  }}
-                  className="w-9 h-9 bg-gradient-to-r from-blue-600 to-teal-500 rounded-lg flex items-center justify-center shadow-md"
-                >
-                  <Stethoscope className="h-5 w-5 text-white" />
-                </motion.div>
-                <span className="text-lg font-bold text-gray-900 dark:text-gray-100">Dr. Nitin Mishra</span>
-              </div>
-            </motion.div>
-            {mounted && (
-              <motion.div
-                initial={{ x: 20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.3 }}
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={toggleDarkMode}
-                  className="p-2"
-                  aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-                >
-                  {darkMode ? (
-                    <Sun className="h-4 w-4" />
-                  ) : (
-                    <Moon className="h-4 w-4" />
-                  )}
-                </Button>
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <motion.div className="flex items-center space-x-4">
+            <Link href="/">
+              <Button variant="ghost" size="sm" className="group hover:bg-blue-50 dark:hover:bg-slate-700">
+                <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+                Back to Home
+              </Button>
+            </Link>
+            <div className="flex items-center space-x-3">
+              <motion.div className="w-9 h-9 bg-gradient-to-r from-blue-600 to-teal-500 rounded-lg flex items-center justify-center shadow-md">
+                <Heart className="h-5 w-5 text-white" />
               </motion.div>
-            )}
-          </div>
+              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">Medical Clinic</span>
+            </div>
+          </motion.div>
+          {mounted && (
+            <Button variant="ghost" size="sm" onClick={toggleDarkMode} className="p-2">
+              {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
+          )}
         </div>
       </motion.header>
 
       <div className="container mx-auto px-4 py-12">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            {/* Left Column - Features */}
-            <motion.div
-              ref={ref}
-              initial="hidden"
-              animate={inView ? "visible" : "hidden"}
-              variants={containerVariants}
-              className="space-y-8"
-            >
-              <motion.div variants={itemVariants} className="space-y-4">
-                <h1 className="text-4xl font-bold text-gray-900 dark:text-white leading-tight">
-                  Secure Patient <span className="text-blue-600 dark:text-blue-400">Portal</span>
-                </h1>
-                <p className="text-lg text-gray-600 dark:text-gray-300">
-                  Access your medical records, appointments, and health information securely.
-                </p>
-              </motion.div>
-
-              <motion.div variants={itemVariants} className="space-y-6">
-                <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 bg-blue-100 dark:bg-blue-900/50 p-3 rounded-full">
-                    <HeartPulse className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white">Health Records</h3>
-                    <p className="text-gray-600 dark:text-gray-400">
-                      View your complete medical history and test results.
-                    </p>
-                  </div>
+        <div className="max-w-4xl mx-auto">
+          <AnimatePresence mode="wait">
+            {!selectedPortal ? (
+              <motion.div
+                key="selection"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, x: -50 }}
+                className="space-y-8"
+              >
+                <div className="text-center space-y-4">
+                  <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
+                    Select Your <span className="text-blue-600 dark:text-blue-400">Portal</span>
+                  </h1>
+                  <p className="text-lg text-gray-600 dark:text-gray-300">
+                    Please choose a portal to access your customized dashboard and tools.
+                  </p>
                 </div>
 
-                <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 bg-teal-100 dark:bg-teal-900/50 p-3 rounded-full">
-                    <CalendarCheck className="h-6 w-6 text-teal-600 dark:text-teal-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white">Appointments</h3>
-                    <p className="text-gray-600 dark:text-gray-400">
-                      Schedule, reschedule or cancel appointments anytime.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-4">
-                  <div className="flex-shrink-0 bg-indigo-100 dark:bg-indigo-900/50 p-3 rounded-full">
-                    <Smartphone className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white">Mobile Friendly</h3>
-                    <p className="text-gray-600 dark:text-gray-400">
-                      Access your health information on any device.
-                    </p>
-                  </div>
+                <div className="grid md:grid-cols-3 gap-6 pt-4">
+                  {(Object.keys(portalConfig) as PortalType[]).map((portal) => {
+                    const conf = portalConfig[portal!];
+                    return (
+                      <motion.div
+                        key={portal}
+                        whileHover={{ y: -5 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <Card 
+                          className="h-full cursor-pointer hover:border-blue-500 dark:hover:border-blue-400 transition-colors dark:bg-slate-800"
+                          onClick={() => setSelectedPortal(portal)}
+                        >
+                          <CardContent className="p-6 text-center space-y-4">
+                            <div className={`mx-auto w-16 h-16 rounded-full bg-gradient-to-br ${conf.color} flex items-center justify-center text-white shadow-lg`}>
+                              {conf.icon}
+                            </div>
+                            <h2 className="text-xl font-bold dark:text-white">{conf.title}</h2>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">{conf.desc}</p>
+                          </CardContent>
+                        </Card>
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </motion.div>
-
-              <motion.div variants={itemVariants} className="pt-4">
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+            ) : (
+              <motion.div
+                key="login-form"
+                initial={{ opacity: 0, x: 50 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="max-w-md mx-auto"
+              >
+                <div className="mb-6">
+                  <Button variant="ghost" onClick={() => setSelectedPortal(null)}>
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back to Portals
+                  </Button>
+                </div>
+                
+                <Card className="border-0 shadow-xl overflow-hidden dark:bg-slate-800/90 dark:border-slate-700">
+                  <div className={`bg-gradient-to-r ${portalConfig[selectedPortal].color} p-4 text-white text-center`}>
+                    <h2 className="text-xl font-semibold">{portalConfig[selectedPortal].title} Login</h2>
+                    <p className="text-sm opacity-90">{portalConfig[selectedPortal].desc}</p>
                   </div>
-                  <div className="relative flex justify-center">
-                    <span className="bg-white dark:bg-slate-800 px-4 text-sm text-gray-500 dark:text-gray-400">
-                      Emergency Contact
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-6 flex flex-col space-y-3 text-center">
-                  <a
-                    href="tel:9258924611"
-                    className="text-blue-600 hover:text-blue-700 font-medium dark:text-blue-400 dark:hover:text-blue-300 text-lg"
-                  >
-                    📞 Emergency: 9258924611
-                  </a>
-                  <a
-                    href="mailto:drnitinmishraderma@gmail.com"
-                    className="text-blue-600 hover:text-blue-700 font-medium dark:text-blue-400 dark:hover:text-blue-300"
-                  >
-                    ✉️ drnitinmishraderma@gmail.com
-                  </a>
-                </div>
-              </motion.div>
-            </motion.div>
-
-            {/* Right Column - Login Form */}
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-            >
-              <Card className="border-0 shadow-xl overflow-hidden dark:bg-slate-800/90 dark:border-slate-700">
-                <div className="bg-gradient-to-r from-blue-600 to-teal-500 p-4 text-white text-center">
-                  <h2 className="text-xl font-semibold">Patient Login</h2>
-                  <p className="text-sm opacity-90">Secure access to your health portal</p>
-                </div>
-                <CardContent className="p-6">
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.4 }}
-                    >
+                  <CardContent className="p-6">
+                    <form onSubmit={handleSubmit} className="space-y-6">
                       <div className="space-y-4">
                         <div>
-                          <Label htmlFor="patient-email" className="dark:text-gray-300">
-                            Email Address
-                          </Label>
-                          <div className="relative">
-                            <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
+                          <Label htmlFor="email">Email Address</Label>
+                          <div className="relative mt-1">
+                            <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                             <Input
-                              id="patient-email"
+                              id="email"
                               type="email"
                               value={formData.email}
                               onChange={(e) => handleInputChange("email", e.target.value)}
                               required
-                              className="pl-10 bg-white dark:bg-slate-700 dark:text-white dark:border-slate-600"
-                              placeholder="patient@example.com"
+                              className="pl-10 dark:bg-slate-700 dark:border-slate-600"
+                              placeholder={`Enter ${selectedPortal} email`}
                             />
                           </div>
                         </div>
 
                         <div>
-                          <Label htmlFor="patient-password" className="dark:text-gray-300">
-                            Password
-                          </Label>
-                          <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-gray-500" />
+                          <Label htmlFor="password">Password</Label>
+                          <div className="relative mt-1">
+                            <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                             <Input
-                              id="patient-password"
+                              id="password"
                               type={showPassword ? "text" : "password"}
                               value={formData.password}
                               onChange={(e) => handleInputChange("password", e.target.value)}
                               required
-                              className="pl-10 pr-10 bg-white dark:bg-slate-700 dark:text-white dark:border-slate-600"
-                              placeholder="Enter your password"
+                              className="pl-10 pr-10 dark:bg-slate-700 dark:border-slate-600"
+                              placeholder="Enter password"
                             />
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="absolute right-0 top-0 h-full px-3 hover:bg-transparent hover:text-blue-600 dark:hover:text-blue-400"
-                              onClick={() => togglePasswordVisibility()}
+                              className="absolute right-0 top-0 h-full px-3"
+                              onClick={togglePasswordVisibility}
                             >
-                              {showPassword ? (
-                                <EyeOff className="h-4 w-4" />
-                              ) : (
-                                <Eye className="h-4 w-4" />
-                              )}
+                              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                             </Button>
                           </div>
                         </div>
 
                         {error && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded dark:bg-red-900/20 dark:border-red-800 dark:text-red-200"
-                          >
+                          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm dark:bg-red-900/20 dark:border-red-800 dark:text-red-200">
                             {error}
-                          </motion.div>
+                          </div>
                         )}
 
                         <div className="flex items-center justify-between">
-                          <Link
-                            href="/forgot-password"
-                            className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                          >
+                          <Link href="/forgot-password" className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400">
                             Forgot password?
                           </Link>
                         </div>
 
-                        <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}>
-                          <Button
-                            type="submit"
-                            className="w-full bg-gradient-to-r from-blue-600 to-teal-500 hover:from-blue-700 hover:to-teal-600 text-white shadow-md"
-                            disabled={loading}
-                          >
-                            {loading ? (
-                              <span className="flex items-center">
-                                <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Signing In...
-                              </span>
-                            ) : (
-                              "Sign In"
-                            )}
-                          </Button>
-                        </motion.div>
+                        <Button
+                          type="submit"
+                          className={`w-full bg-gradient-to-r ${portalConfig[selectedPortal].color} hover:opacity-90 text-white shadow-md transition-opacity`}
+                          disabled={loading}
+                        >
+                          {loading ? "Authenticating..." : "Sign In"}
+                        </Button>
 
-                        <div className="text-center">
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            New patient?{" "}
-                            <Link
-                              href="/register"
-                              className="text-blue-600 hover:text-blue-700 font-medium dark:text-blue-400 dark:hover:text-blue-300"
-                            >
-                              Create an account
-                            </Link>
-                          </p>
-                        </div>
+                        {selectedPortal === "patient" && (
+                          <div className="text-center pt-2">
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              New patient?{" "}
+                              <Link href="/register" className="text-blue-600 hover:text-blue-700 font-medium dark:text-blue-400">
+                                Create an account
+                              </Link>
+                            </p>
+                          </div>
+                        )}
                       </div>
-                    </motion.div>
-                  </form>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
+                    </form>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>

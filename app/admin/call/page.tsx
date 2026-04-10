@@ -5,16 +5,16 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { useAuthState } from "react-firebase-hooks/auth"
 import { Phone, PhoneOff, Mic, MicOff, Video, VideoOff, Users, Clock, ArrowLeft, Loader2 } from "lucide-react"
-import { auth, db } from "@/lib/firebase"
-import { doc, updateDoc, addDoc, collection, deleteDoc, serverTimestamp, onSnapshot } from "firebase/firestore"
+import { useAuth } from "@/contexts/auth-context"
+import axios from "axios"
 
 const appId = process.env.NEXT_PUBLIC_AGORA_APP_ID!
-const tokenBaseURL = process.env.NEXT_PUBLIC_TOKEN_BASE_URL!
+const tokenBaseURL = "http://localhost:5001/api/calls/get-token";
+const CALLS_API = "http://localhost:5001/api/calls";
 
 const AdminCallPage = () => {
-  const [user] = useAuthState(auth)
+  const { user } = useAuth()
   const searchParams = useSearchParams()
   const channelName = searchParams.get("channel")
   const callType = searchParams.get("type") || "video"
@@ -37,20 +37,31 @@ const AdminCallPage = () => {
   const [connectionStatus, setConnectionStatus] = useState("Ready to connect")
   const [callData, setCallData] = useState<any>(null)
 
-  // Listen to call data changes
+  const fetchCallStatus = async () => {
+    if (!callId) return
+    try {
+      const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+      const token = tokenMatch ? tokenMatch[1] : null;
+
+      const response = await axios.get(`${CALLS_API}/${callId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCallData(response.data)
+      if (response.data.status === 'ended') {
+        leaveCall()
+      }
+    } catch (err) {
+      console.error("Error fetching call status:", err)
+    }
+  }
+
   useEffect(() => {
     if (!callId) return
-
-    const unsubscribe = onSnapshot(doc(db, "activeCalls", callId), (doc) => {
-      if (doc.exists()) {
-        setCallData(doc.data())
-      }
-    })
-
-    return () => unsubscribe()
+    fetchCallStatus()
+    const interval = setInterval(fetchCallStatus, 3000)
+    return () => clearInterval(interval)
   }, [callId])
 
-  // Load AgoraRTC dynamically
   useEffect(() => {
     ;(async () => {
       try {
@@ -64,7 +75,6 @@ const AdminCallPage = () => {
     })()
   }, [])
 
-  // Call duration timer
   useEffect(() => {
     let interval: NodeJS.Timeout
     if (joined && callStartTimeRef.current) {
@@ -90,10 +100,9 @@ const AdminCallPage = () => {
     setConnectionStatus("Joining call...")
 
     try {
-      const uid = `doctor_${user.uid}`
+      const uid = user.email
       let token = null
 
-      // Try to fetch token
       try {
         if (tokenBaseURL) {
           const res = await fetch(`${tokenBaseURL}?channelName=${channelName}&uid=${uid}&role=doctor`)
@@ -103,7 +112,7 @@ const AdminCallPage = () => {
           }
         }
       } catch (tokenError) {
-        console.warn("Token generation failed, using null token for testing")
+        console.warn("Token generation failed")
       }
 
       const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
@@ -131,7 +140,6 @@ const AdminCallPage = () => {
 
       await client.join(appId, channelName, token, uid)
 
-      // Create tracks based on call type
       if (callType === "video") {
         const [audioTrack, videoTrack] = await AgoraRTC.createMicrophoneAndCameraTracks()
         localTracksRef.current = [audioTrack, videoTrack]
@@ -147,17 +155,20 @@ const AdminCallPage = () => {
       callStartTimeRef.current = new Date()
       setConnectionStatus("Connected")
 
-      // Update call status in Firebase
       if (callId) {
-        await updateDoc(doc(db, "activeCalls", callId), {
+        const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+        const authToken = tokenMatch ? tokenMatch[1] : null;
+
+        await axios.put(`${CALLS_API}/${callId}`, {
           status: "connected",
-          doctorJoinedAt: serverTimestamp(),
+        }, {
+          headers: { Authorization: `Bearer ${authToken}` }
         })
       }
     } catch (error) {
       console.error("Failed to join call:", error)
       setConnectionStatus("Connection failed")
-      alert("Failed to join call. Please try again.")
+      alert("Failed to join call.")
     } finally {
       setConnecting(false)
     }
@@ -168,29 +179,16 @@ const AdminCallPage = () => {
       localTracksRef.current.forEach((track: any) => track.close())
       await clientRef.current.leave()
 
-      // Calculate call duration
-      const duration = callStartTimeRef.current
-        ? Math.floor((new Date().getTime() - callStartTimeRef.current.getTime()) / 1000)
-        : 0
-
-      // Move to call logs and remove from active calls
-      if (callId && callData) {
+      if (callId) {
         try {
-          // Add to call logs
-          await addDoc(collection(db, "callLogs"), {
-            patientName: callData.patientName || "Patient",
-            patientEmail: callData.patientEmail || "patient@example.com",
-            callType,
-            duration,
-            startTime: callStartTimeRef.current ? new Date(callStartTimeRef.current) : new Date(),
-            endTime: serverTimestamp(),
-            status: "completed",
-          })
+          const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+          const authToken = tokenMatch ? tokenMatch[1] : null;
 
-          // Remove from active calls
-          await deleteDoc(doc(db, "activeCalls", callId))
+          await axios.put(`${CALLS_API}/${callId}`, { status: "ended" }, {
+            headers: { Authorization: `Bearer ${authToken}` }
+          });
         } catch (error) {
-          console.error("Error updating call logs:", error)
+          console.error("Error updating call status:", error)
         }
       }
 
@@ -198,7 +196,6 @@ const AdminCallPage = () => {
       setCallDuration(0)
       setConnectionStatus("Call ended")
 
-      // Redirect back to calls page
       setTimeout(() => {
         router.push("/admin/calls")
       }, 1000)
@@ -215,7 +212,6 @@ const AdminCallPage = () => {
 
   const toggleVideo = () => {
     if (callType === "audio") return
-
     const videoTrack = localTracksRef.current?.[1]
     if (videoTrack) {
       videoTrack.setEnabled(mutedVideo)
@@ -236,7 +232,6 @@ const AdminCallPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white">
-      {/* Header */}
       <header className="bg-black/20 backdrop-blur-md border-b border-white/10 p-4">
         <div className="container mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-4">
@@ -251,34 +246,16 @@ const AdminCallPage = () => {
             </Button>
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-green-500 rounded-full flex items-center justify-center">
-                {callType === "video" ? (
-                  <Video className="h-5 w-5 text-white" />
-                ) : (
-                  <Phone className="h-5 w-5 text-white" />
-                )}
+                {callType === "video" ? <Video className="h-5 w-5 text-white" /> : <Phone className="h-5 w-5 text-white" />}
               </div>
               <div>
-                <h2 className="font-semibold">
-                  {callType === "video" ? "Video Call" : "Audio Call"} with {callData?.patientName || "Patient"}
-                </h2>
+                <h2 className="font-semibold">{callData?.patientName || "Patient"}</h2>
                 <p className="text-sm text-gray-300">Doctor Session</p>
               </div>
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <Badge
-              variant="secondary"
-              className={`${
-                connectionStatus === "Connected"
-                  ? "bg-green-500/20 text-green-300 border-green-500/30"
-                  : "bg-yellow-500/20 text-yellow-300 border-yellow-500/30"
-              }`}
-            >
-              <div
-                className={`w-2 h-2 rounded-full mr-2 ${
-                  connectionStatus === "Connected" ? "bg-green-400 animate-pulse" : "bg-yellow-400"
-                }`}
-              ></div>
+            <Badge variant="secondary" className={connectionStatus === "Connected" ? "bg-green-500/20 text-green-300" : "bg-yellow-500/20 text-yellow-300"}>
               {connectionStatus}
             </Badge>
             {joined && (
@@ -293,184 +270,57 @@ const AdminCallPage = () => {
 
       <div className="container mx-auto px-4 py-8 h-[calc(100vh-80px)]">
         {callType === "video" ? (
-          // VIDEO CALL LAYOUT
           <div className="h-full flex flex-col">
             <div className="flex-1 grid lg:grid-cols-2 gap-6 mb-6">
-              {/* Local Video (Doctor) */}
               <Card className="bg-black/40 border-white/10 backdrop-blur-sm">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-gray-300 flex items-center">
-                    <Users className="h-4 w-4 mr-2" />
-                    You (Doctor)
-                  </CardTitle>
+                  <CardTitle className="text-sm text-gray-300">You (Doctor)</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <div
-                    ref={localVideoRef}
-                    className="bg-gray-800 rounded-lg w-full h-64 lg:h-96 flex items-center justify-center relative overflow-hidden"
-                  >
-                    {mutedVideo && (
-                      <div className="absolute inset-0 bg-gray-800 flex items-center justify-center">
-                        <div className="text-center">
-                          <VideoOff className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                          <p className="text-gray-400">Camera is off</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <div ref={localVideoRef} className="bg-gray-800 rounded-lg w-full h-64 lg:h-96 flex items-center justify-center relative overflow-hidden" />
                 </CardContent>
               </Card>
-
-              {/* Remote Video (Patient) */}
               <Card className="bg-black/40 border-white/10 backdrop-blur-sm">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-gray-300 flex items-center">
-                    <Users className="h-4 w-4 mr-2" />
-                    {callData?.patientName || "Patient"}
-                  </CardTitle>
+                  <CardTitle className="text-sm text-gray-300">{callData?.patientName || "Patient"}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <div
-                    ref={remoteVideoRef}
-                    className="bg-gray-800 rounded-lg w-full h-64 lg:h-96 flex items-center justify-center"
-                  >
-                    {remoteUsers.length === 0 && (
-                      <div className="text-center">
-                        <Users className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-                        <p className="text-gray-400">Waiting for patient to join...</p>
-                      </div>
-                    )}
-                  </div>
+                  <div ref={remoteVideoRef} className="bg-gray-800 rounded-lg w-full h-64 lg:h-96 flex items-center justify-center" />
                 </CardContent>
               </Card>
             </div>
-
-            {/* VIDEO CALL CONTROLS */}
             <div className="flex justify-center">
-              <Card className="bg-black/40 border-white/10 backdrop-blur-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center space-x-4">
-                    {!joined ? (
-                      <Button
-                        onClick={joinCall}
-                        disabled={connecting}
-                        className="bg-green-600 hover:bg-green-700 text-white px-8 py-3"
-                        size="lg"
-                      >
-                        {connecting ? (
-                          <>
-                            <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                            Joining...
-                          </>
-                        ) : (
-                          <>
-                            <Video className="h-5 w-5 mr-2" />
-                            Join Video Call
-                          </>
-                        )}
-                      </Button>
-                    ) : (
-                      <>
-                        <Button
-                          variant={mutedAudio ? "destructive" : "secondary"}
-                          onClick={toggleAudio}
-                          className="p-3"
-                          title={mutedAudio ? "Unmute" : "Mute"}
-                        >
-                          {mutedAudio ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-                        </Button>
-                        <Button
-                          variant={mutedVideo ? "destructive" : "secondary"}
-                          onClick={toggleVideo}
-                          className="p-3"
-                          title={mutedVideo ? "Turn Camera On" : "Turn Camera Off"}
-                        >
-                          {mutedVideo ? <VideoOff className="h-5 w-5" /> : <Video className="h-5 w-5" />}
-                        </Button>
-                        <Button variant="destructive" onClick={leaveCall} className="px-6 py-3">
-                          <PhoneOff className="h-5 w-5 mr-2" />
-                          End Call
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="flex items-center space-x-4 bg-black/40 p-4 rounded-lg">
+                {!joined ? (
+                  <Button onClick={joinCall} disabled={connecting} className="bg-green-600 hover:bg-green-700 text-white px-8">Join Video Call</Button>
+                ) : (
+                  <>
+                    <Button variant={mutedAudio ? "destructive" : "secondary"} onClick={toggleAudio}>{mutedAudio ? <MicOff /> : <Mic />}</Button>
+                    <Button variant={mutedVideo ? "destructive" : "secondary"} onClick={toggleVideo}>{mutedVideo ? <VideoOff /> : <Video />}</Button>
+                    <Button variant="destructive" onClick={leaveCall}>End Call</Button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         ) : (
-          // AUDIO CALL LAYOUT
           <div className="h-full flex items-center justify-center">
-            <Card className="bg-black/40 border-white/10 backdrop-blur-sm w-full max-w-md">
-              <CardHeader className="text-center">
-                <div className="w-24 h-24 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Phone className="h-12 w-12 text-white" />
-                </div>
-                <CardTitle className="text-xl">{callData?.patientName || "Patient"} Call</CardTitle>
-                <p className="text-gray-400">Audio Call Session</p>
-                {joined && (
-                  <div className="flex items-center justify-center space-x-2 text-lg font-mono mt-2">
-                    <Clock className="h-5 w-5" />
-                    <span>{formatDuration(callDuration)}</span>
-                  </div>
+            <Card className="bg-black/40 border-white/10 backdrop-blur-sm w-full max-w-md p-6 text-center">
+              <div className="w-24 h-24 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Phone className="h-12 w-12 text-white" />
+              </div>
+              <h2 className="text-xl font-bold mb-2">{callData?.patientName || "Patient"}</h2>
+              <p className="text-gray-400 mb-6 font-mono">{formatDuration(callDuration)}</p>
+              <div className="flex justify-center space-x-4">
+                {!joined ? (
+                  <Button onClick={joinCall} disabled={connecting} className="bg-green-600 hover:bg-green-700 text-white">Join Audio Call</Button>
+                ) : (
+                  <>
+                    <Button variant={mutedAudio ? "destructive" : "secondary"} onClick={toggleAudio}>{mutedAudio ? <MicOff /> : <Mic />}</Button>
+                    <Button variant="destructive" onClick={leaveCall}>End Call</Button>
+                  </>
                 )}
-              </CardHeader>
-              <CardContent className="text-center space-y-6">
-                <div className="flex items-center justify-center space-x-2 text-sm">
-                  <div
-                    className={`w-3 h-3 rounded-full ${
-                      connectionStatus === "Connected" ? "bg-green-500 animate-pulse" : "bg-yellow-500"
-                    }`}
-                  ></div>
-                  <span>{connectionStatus}</span>
-                </div>
-
-                {/* AUDIO CALL CONTROLS */}
-                <div className="flex justify-center space-x-4">
-                  {!joined ? (
-                    <Button
-                      onClick={joinCall}
-                      disabled={connecting}
-                      className="bg-green-600 hover:bg-green-700 text-white px-8 py-3"
-                      size="lg"
-                    >
-                      {connecting ? (
-                        <>
-                          <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                          Joining...
-                        </>
-                      ) : (
-                        <>
-                          <Phone className="h-5 w-5 mr-2" />
-                          Join Audio Call
-                        </>
-                      )}
-                    </Button>
-                  ) : (
-                    <>
-                      <Button
-                        variant={mutedAudio ? "destructive" : "secondary"}
-                        onClick={toggleAudio}
-                        className="p-4"
-                        size="lg"
-                        title={mutedAudio ? "Unmute" : "Mute"}
-                      >
-                        {mutedAudio ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
-                      </Button>
-                      <Button variant="destructive" onClick={leaveCall} className="px-6 py-4" size="lg">
-                        <PhoneOff className="h-6 w-6 mr-2" />
-                        End Call
-                      </Button>
-                    </>
-                  )}
-                </div>
-
-                {joined && (
-                  <div className="text-sm text-gray-400">
-                    <p>Connected participants: {remoteUsers.length + 1}</p>
-                  </div>
-                )}
-              </CardContent>
+              </div>
             </Card>
           </div>
         )}

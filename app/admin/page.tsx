@@ -4,21 +4,11 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useAuthState } from "react-firebase-hooks/auth";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  orderBy,
-  limit,
-  Timestamp,
-  onSnapshot,
-  updateDoc,
-} from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { useAuth } from "@/contexts/auth-context";
+import { useDashboardData } from "@/hooks/useDashboardData";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Input } from "@/components/ui/input";
+import axios from "axios";
 import {
   Calendar,
   Users,
@@ -49,135 +39,9 @@ interface RecentActivity {
 }
 
 export default function DoctorDashboard() {
-  const [user] = useAuthState(auth);
+  const { user } = useAuth();
   const { role, updateRole, loading: roleLoading } = useUserRole();
-  const [stats, setStats] = useState<DashboardStats>({
-    totalAppointments: 0,
-    todayAppointments: 0,
-    totalRevenue: 0,
-    activePatients: 0,
-  });
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const doctorFee = Number.parseInt(
-    process.env.NEXT_PUBLIC_DOCTOR_FEE || "500"
-  );
-
-  useEffect(() => {
-    if (user) {
-      fetchDashboardData();
-    }
-
-    // Listen to real-time updates from "appointments"
-    const unsubscribe = onSnapshot(
-      collection(db, "appointments"),
-      (snapshot) => {
-        const allAppointments = snapshot.docs.map((doc) => doc.data());
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(today.getDate() + 1);
-
-        const todayAppointments = allAppointments.filter((a) => {
-          const date = new Date(a.date); // string date from Firestore
-          return date >= today && date < tomorrow;
-        }).length;
-
-        const totalAppointments = allAppointments.length;
-
-        const totalRevenue =
-          allAppointments.filter((a) => a.status === "completed").length *
-          doctorFee;
-
-        setStats((prev) => ({
-          ...prev,
-          todayAppointments,
-          totalAppointments,
-          totalRevenue,
-        }));
-      }
-    );
-
-    return () => unsubscribe();
-  }, [user]);
-
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-
-      // Get total appointments from appointments collection
-      const appointmentsQuery = query(collection(db, "appointments"));
-      const appointmentsSnapshot = await getDocs(appointmentsQuery);
-      const totalAppointments = appointmentsSnapshot.size;
-
-      // Get today's appointments
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
-      const todayQuery = query(
-        collection(db, "appointments"),
-        where("date", ">=", Timestamp.fromDate(today)),
-        where("date", "<", Timestamp.fromDate(tomorrow))
-      );
-      const todaySnapshot = await getDocs(todayQuery);
-      const todayAppointments = todaySnapshot.size;
-
-      // Calculate revenue (completed consultations * fee)
-      const completedQuery = query(
-        collection(db, "appointments"),
-        where("status", "==", "completed")
-      );
-      const completedSnapshot = await getDocs(completedQuery);
-      const totalRevenue = completedSnapshot.size * doctorFee;
-
-      // Get active patients in last 30 days
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      const recentChatsQuery = query(
-        collection(db, "chats"),
-        where("createdAt", ">=", Timestamp.fromDate(thirtyDaysAgo))
-      );
-      const recentChatsSnapshot = await getDocs(recentChatsQuery);
-      const activePatients = new Set(
-        recentChatsSnapshot.docs.map((doc) => doc.data().patientEmail)
-      ).size;
-
-      setStats({
-        totalAppointments,
-        todayAppointments,
-        totalRevenue,
-        activePatients,
-      });
-
-      // Get recent activity
-      const recentQuery = query(
-        collection(db, "appointments"),
-        orderBy("createdAt", "desc"),
-        limit(5)
-      );
-      const recentSnapshot = await getDocs(recentQuery);
-      const activities: RecentActivity[] = recentSnapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          type: "appointment",
-          patient: data.patientName || "Unknown Patient",
-          time: data.createdAt?.toDate?.()?.toLocaleTimeString() || "Unknown",
-          status: data.status || "pending",
-        };
-      });
-      setRecentActivity(activities);
-    } catch (error) {
-      console.error("Error fetching dashboard data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { stats, recentActivity, loading } = useDashboardData();
 
   const quickAccessCards = [
     {
@@ -365,7 +229,7 @@ export default function DoctorDashboard() {
           transition={{ duration: 0.5 }}
           className="w-full mt-10"
         >
-          <Card className="w-full bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm shadow-xl border-slate-200/60 dark:border-slate-700/60">
+          <Card className="w-full bg-white dark:bg-slate-900 shadow-xl border-slate-200 dark:border-slate-800">
             <CardHeader>
               <CardTitle className="text-xl font-bold text-slate-900 dark:text-white">
                 User Role Management
@@ -392,21 +256,12 @@ export default function DoctorDashboard() {
                   }
 
                   try {
-                    // Step 1: Find user document by email field
-                    const usersRef = collection(db, "users");
-                    const q = query(usersRef, where("email", "==", email));
-                    const querySnapshot = await getDocs(q);
+                    const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+                    const token = tokenMatch ? tokenMatch[1] : null;
 
-                    if (querySnapshot.empty) {
-                      alert("User not found. Please check the email.");
-                      return;
-                    }
-
-                    // Step 2: Update the role and set forceLogout flag
-                    const userDoc = querySnapshot.docs[0];
-                    await updateDoc(userDoc.ref, { 
-                      role,
-                      forceLogout: true // Set flag to force logout
+                    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
+                    await axios.put(`${API_BASE_URL}/api/auth/role`, { email, role }, {
+                      headers: { Authorization: `Bearer ${token}` }
                     });
 
                     alert(`Role updated to '${role}' for ${email}. User will be logged out.`);

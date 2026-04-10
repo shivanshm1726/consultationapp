@@ -120,7 +120,7 @@ export default function ContactPage() {
                       onChange={(e) => handleInputChange("phone", e.target.value)}
                       required
                       className={darkMode ? "bg-slate-700 text-white border-slate-600" : "bg-white/50"}
-                      placeholder="9258924611"
+                      placeholder="+1 (555) 123-4567"
                     />
                   </div>
 
@@ -179,7 +179,7 @@ export default function ContactPage() {
                     <Phone className={`h-6 w-6 ${darkMode ? "text-green-400" : "text-green-600"}`} />
                     <div>
                       <div className={`font-semibold ${darkMode ? "text-slate-100" : "text-gray-900"}`}>Call Us</div>
-                      <div className={`${darkMode ? "text-green-400" : "text-green-600"} font-bold text-lg`}>9258924611</div>
+                      <div className={`${darkMode ? "text-green-400" : "text-green-600"} font-bold text-lg`}>+1 (555) 123-4567</div>
                       <div className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-600"}`}>Available during clinic hours</div>
                     </div>
                   </div>
@@ -188,7 +188,7 @@ export default function ContactPage() {
                     <Mail className={`h-6 w-6 ${darkMode ? "text-indigo-400" : "text-indigo-600"}`} />
                     <div>
                       <div className={`font-semibold ${darkMode ? "text-slate-100" : "text-gray-900"}`}>Email Us</div>
-                      <div className={`${darkMode ? "text-indigo-400" : "text-indigo-600"} font-bold`}>dermanitin@gmail.com</div>
+                      <div className={`${darkMode ? "text-indigo-400" : "text-indigo-600"} font-bold`}>contact@medicalclinic.com</div>
                       <div className={`text-sm ${darkMode ? "text-slate-400" : "text-gray-600"}`}>We'll respond within 24 hours</div>
                     </div>
                   </div>
@@ -205,8 +205,8 @@ export default function ContactPage() {
                     <div className="flex items-start space-x-3 mb-3">
                       <MapPin className={`h-5 w-5 mt-1 ${darkMode ? "text-indigo-400" : "text-indigo-600"}`} />
                       <div>
-                        <h3 className={`font-semibold ${darkMode ? "text-slate-100" : "text-gray-900"}`}>Rampur Garden Clinic</h3>
-                        <p className={darkMode ? "text-slate-400" : "text-gray-600"}>Rampur Garden, Bareilly</p>
+                        <h3 className={`font-semibold ${darkMode ? "text-slate-100" : "text-gray-900"}`}>North Branch Clinic</h3>
+                        <p className={darkMode ? "text-slate-400" : "text-gray-600"}>North Branch, City Center</p>
                       </div>
                     </div>
                     <div className="ml-8 space-y-2">
@@ -225,8 +225,8 @@ export default function ContactPage() {
                     <div className="flex items-start space-x-3 mb-3">
                       <MapPin className={`h-5 w-5 mt-1 ${darkMode ? "text-teal-400" : "text-teal-600"}`} />
                       <div>
-                        <h3 className={`font-semibold ${darkMode ? "text-slate-100" : "text-gray-900"}`}>DD Puram Clinic</h3>
-                        <p className={darkMode ? "text-slate-400" : "text-gray-600"}>DD Puram, Bareilly</p>
+                        <h3 className={`font-semibold ${darkMode ? "text-slate-100" : "text-gray-900"}`}>South Branch Clinic</h3>
+                        <p className={darkMode ? "text-slate-400" : "text-gray-600"}>South Branch, City Center</p>
                       </div>
                     </div>
                     <div className="ml-8 space-y-2">
@@ -256,9 +256,9 @@ export default function ContactPage() {
                       className={`${darkMode ? "border-red-700 text-red-300 hover:bg-red-900/30" : "border-red-300 text-red-700 hover:bg-red-100"} bg-transparent`}
                       asChild
                     >
-                      <a href="tel:9258924611">
+                      <a href="tel:+1 (555) 123-4567">
                         <Phone className="h-4 w-4 mr-2" />
-                        Call Now: 9258924611
+                        Call Now: +1 (555) 123-4567
                       </a>
                     </Button>
                   </div>

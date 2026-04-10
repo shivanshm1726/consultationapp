@@ -1,70 +1,63 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  doc,
-  updateDoc,
-  addDoc,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import type { Appointment } from "../lib/types";
+import axios from "axios";
+
+const API_URL = "http://localhost:5001/api/appointments";
 
 export function useAppointments() {
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const q = query(
-      collection(db, "appointments"),
-      orderBy("appointmentDate", "desc")
-    );
+  const fetchAppointments = async () => {
+    try {
+      const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+      const token = tokenMatch ? tokenMatch[1] : null;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const appointmentData = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          patientId: data.patientId || "", 
-          ...data,
-        };
-      }) as Appointment[];
-
-      setAppointments(appointmentData);
+      const response = await axios.get(`${API_URL}/all`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAppointments(response.data);
+    } catch (error) {
+      console.error("Error fetching appointments:", error);
+    } finally {
       setLoading(false);
-    });
+    }
+  };
 
-    return () => unsubscribe();
+  useEffect(() => {
+    fetchAppointments();
   }, []);
 
   const updateAppointmentStatus = async (
     appointmentId: string,
-    status: Appointment["status"]
+    status: string,
+    paymentStatus?: string
   ) => {
     try {
-      await updateDoc(doc(db, "appointments", appointmentId), {
-        status,
-        updatedAt: new Date().toISOString(),
+      const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+      const token = tokenMatch ? tokenMatch[1] : null;
+
+      await axios.put(`${API_URL}/${appointmentId}`, { status, paymentStatus }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
+      fetchAppointments(); // Refresh
     } catch (error) {
       console.error("Error updating appointment:", error);
       throw error;
     }
   };
 
-  const createAppointment = async (
-    appointmentData: Omit<Appointment, "id" | "createdAt" | "updatedAt">
-  ) => {
+  const createAppointment = async (appointmentData: any) => {
     try {
-      const docRef = await addDoc(collection(db, "appointments"), {
-        ...appointmentData,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+      const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+      const token = tokenMatch ? tokenMatch[1] : null;
+
+      const response = await axios.post(API_URL, appointmentData, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      return docRef.id;
+      fetchAppointments(); // Refresh
+      return response.data;
     } catch (error) {
       console.error("Error creating appointment:", error);
       throw error;

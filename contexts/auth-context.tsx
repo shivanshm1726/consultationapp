@@ -3,20 +3,20 @@
 
 import type React from "react";
 import { createContext, useContext, useEffect, useState } from "react";
-import { type User, onAuthStateChanged } from "firebase/auth";
-import { auth } from "@/lib/firebase";
 import { getUserData, type UserData } from "@/lib/auth";
 
 interface AuthContextType {
-  user: User | null;
+  user: any;
   userData: UserData | null;
   loading: boolean;
+  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   userData: null,
   loading: true,
+  logout: () => {},
 });
 
 export const useAuth = () => {
@@ -28,41 +28,55 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const logout = () => {
+    setUser(null);
+    setUserData(null);
+    localStorage.removeItem("role");
+    document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+  };
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
+    const fetchUser = async () => {
+      try {
+        const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+        const token = tokenMatch ? tokenMatch[1] : null;
 
-      if (user) {
-        try {
-          const data = await getUserData(user.uid);
-          setUserData(data);
+        if (token) {
+          const data = await getUserData(token);
+          if (data) {
+            setUser({ uid: data.uid, email: data.email, displayName: data.fullName });
+            setUserData(data);
 
-          if (data?.role) {
-            localStorage.setItem("role", data.role);
+            if (data.role) {
+              localStorage.setItem("role", data.role);
+            } else {
+              localStorage.removeItem("role");
+            }
           } else {
-            localStorage.removeItem("role");
+            throw new Error("Invalid token");
           }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
+        } else {
+          setUser(null);
           setUserData(null);
           localStorage.removeItem("role");
-          document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
         }
-      } else {
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+        setUser(null);
         setUserData(null);
         localStorage.removeItem("role");
         document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+      } finally {
+        setLoading(false);
       }
+    };
 
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    fetchUser();
   }, []);
 
-  return <AuthContext.Provider value={{ user, userData, loading }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, userData, loading, logout }}>{children}</AuthContext.Provider>;
 };

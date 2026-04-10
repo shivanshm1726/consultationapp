@@ -20,32 +20,28 @@ import {
   Loader2,
 } from "lucide-react"
 import { useTheme } from "next-themes"
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, deleteDoc, getDocs, where, getDoc, doc } from "firebase/firestore"
-import { db, auth, storage } from "@/lib/firebase"
-import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth"
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { v4 as uuidv4 } from "uuid"
+import { useAuth } from "@/contexts/auth-context"
+import axios from "axios"
 import { Suspense } from "react"
 import { toast } from "@/components/ui/use-toast"
 import PatientList from "../components/PatientList"
 
-// Define MessageType interface for better type safety
+const CHAT_API = "http://localhost:5001/api/chats"
+
 type MessageType = {
   id: string
   text?: string
-  senderEmail: string // Required
-  timestamp: any // Firestore Timestamp or Date
+  senderEmail: string
+  timestamp: any
   mediaUrl?: string
   mediaType?: "image" | "video" | "file"
   fileName?: string
-  uid?: string // Optional: for sender's UID (from auth)
-  photoURL?: string | null // Optional: for sender's photo (from auth) - Allow null
 }
 
 function LiveChatContent() {
   const [message, setMessage] = useState("")
   const [messages, setMessages] = useState<MessageType[]>([])
-  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null)
+  const { user: currentUser, userData } = useAuth()
   const [roomId, setRoomId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -54,7 +50,7 @@ function LiveChatContent() {
   const searchParams = useSearchParams()
   const patientEmailFromUrl = searchParams.get("patientEmail")
 
-  const doctorEmail = process.env.NEXT_PUBLIC_DOCTOR_EMAIL!
+  const doctorEmail = process.env.NEXT_PUBLIC_DOCTOR_EMAIL || "contact@medicalclinic.com"
 
   const doctorQuickReplies = [
     "How can I help you?",
@@ -77,53 +73,49 @@ function LiveChatContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { theme } = useTheme()
 
+  useEffect(() => {
+    if (userData && userData.role) {
+      setUserRole(userData.role as string)
+    }
+  }, [userData])
+
+  const fetchMessages = async (id: string) => {
+    try {
+      const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+      const token = tokenMatch ? tokenMatch[1] : null;
+
+      const response = await axios.get(`${CHAT_API}/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setMessages(response.data);
+    } catch (err) {
+      console.error("Error fetching messages:", err);
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if ((!message.trim() && !selectedFile) || !currentUser?.email || !roomId || isLoading) return
+    if (!message.trim() || !currentUser || !roomId || isLoading) return
 
     setIsLoading(true)
     try {
-      let messageData: Partial<MessageType> = {
-        senderEmail: currentUser.email,
-        timestamp: serverTimestamp(),
-        uid: currentUser.uid,
-        photoURL: currentUser.photoURL,
-      }
+      const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+      const token = tokenMatch ? tokenMatch[1] : null;
 
-      if (selectedFile) {
-        const fileId = uuidv4()
-        const storageRef = ref(storage, `chatMedia/${roomId}/${fileId}_${selectedFile.name}`)
-        await uploadBytes(storageRef, selectedFile)
-        const fileURL = await getDownloadURL(storageRef)
+      await axios.post(CHAT_API, {
+        roomId,
+        text: message.trim(),
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
 
-        const mediaType = selectedFile.type.startsWith("image/")
-          ? "image"
-          : selectedFile.type.startsWith("video/")
-            ? "video"
-            : "file"
-
-        messageData = {
-          ...messageData,
-          mediaUrl: fileURL,
-          mediaType: mediaType,
-          fileName: selectedFile.name,
-          text: message.trim(),
-        }
-      } else {
-        messageData.text = message.trim()
-      }
-
-      await addDoc(collection(db, "chats", roomId, "messages"), messageData)
       setMessage("")
-      setSelectedFile(null)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ""
-      }
+      fetchMessages(roomId)
     } catch (err) {
       console.error("Error sending message: ", err)
       toast({
         title: "Error",
-        description: "Failed to send message. Please try again.",
+        description: "Failed to send message.",
         variant: "destructive",
       })
     } finally {
@@ -142,87 +134,12 @@ function LiveChatContent() {
 
   const handleCall = async (type: "audio" | "video") => {
     if (!roomId || !currentUser?.email) return
-    const NEXT_PUBLIC_TOKEN_BASE_URL = process.env.NEXT_PUBLIC_TOKEN_BASE_URL
-    if (!NEXT_PUBLIC_TOKEN_BASE_URL) {
-      console.error("NEXT_PUBLIC_TOKEN_BASE_URL is not set.")
-      return
-    }
-
-    try {
-      const response = await fetch(
-        `${NEXT_PUBLIC_TOKEN_BASE_URL}?channelName=${roomId}&uid=${currentUser.email}&role=publisher`,
-      )
-      const { token } = await response.json()
-      router.push(`/call?channel=${roomId}&uid=${currentUser.email}&token=${token}&type=${type}`)
-    } catch (err) {
-      console.error("Failed to fetch Agora token", err)
-      toast({
-        title: "Error",
-        description: "Failed to initiate call. Please try again.",
-        variant: "destructive",
-      })
-    }
+    router.push(`/call?channel=${roomId}&uid=${currentUser.email}&type=${type}`)
   }
 
   const handleEndConsultation = async () => {
-    if (
-      window.confirm(
-        "Are you sure you want to end this consultation? This will end the current active session."
-      )
-    ) {
-      try {
-        if (roomId && patientEmailFromUrl) {
-          // Calculate duration
-          const activeChatsRef = collection(db, "activeChats")
-          const q = query(activeChatsRef, where("patientEmail", "==", patientEmailFromUrl), where("status", "==", "active"))
-          const snapshot = await getDocs(q)
-          let duration = "0 min"
-          let startTime = ""
-          if (!snapshot.empty) {
-            const chatData = snapshot.docs[0].data()
-            const startTimestamp = chatData.timestamp?.toDate()
-            if (startTimestamp) {
-              const endTime = new Date()
-              const durationMs = endTime.getTime() - startTimestamp.getTime()
-              duration = `${Math.round(durationMs / 60000)} min`
-              startTime = startTimestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            }
-          }
-
-          // Add to chatLogs collection
-          await addDoc(collection(db, "chatLogs"), {
-            id: roomId,
-            patient: preFormData.name || patientEmailFromUrl.split("@")[0],
-            doctor: "Dr. Nitin Mishra",
-            date: new Date().toISOString().split("T")[0],
-            startTime: startTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            endTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            duration,
-            type: "chat",
-            status: "completed",
-            messageCount: messages.length,
-            attachments: messages.filter((msg) => msg.mediaUrl).length,
-            lastMessage: messages[messages.length - 1]?.text || "No messages",
-            timestamp: serverTimestamp(),
-          })
-
-          // Delete from activeChats
-          const deletePromises = snapshot.docs.map((doc) => deleteDoc(doc.ref))
-          await Promise.all(deletePromises)
-        }
-
-        setMessages([])
-        setMessage("")
-        setSelectedFile(null)
-        router.push("/admin/chat")
-      } catch (err) {
-        console.error("Error ending consultation: ", err)
-        toast({
-          title: "Error",
-          description: "Failed to end consultation. Please try again or contact support.",
-          variant: "destructive",
-        })
-      }
+    if (confirm("Are you sure you want to end this consultation?")) {
+      router.push("/admin/chat")
     }
   }
 
@@ -231,89 +148,18 @@ function LiveChatContent() {
   }, [messages])
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (loggedInUser: FirebaseUser | null) => {
-      if (loggedInUser) {
-        setCurrentUser(loggedInUser)
+    if (patientEmailFromUrl && (userRole === "admin" || userRole === "receptionist")) {
+      const sortedEmails = [doctorEmail, patientEmailFromUrl].sort()
+      const currentRoomId = `${sortedEmails[0]}_${sortedEmails[1]}`
+      setRoomId(currentRoomId)
+      fetchMessages(currentRoomId)
 
-        const userDocRef = doc(db, "users", loggedInUser.uid)
-        const userDoc = await getDoc(userDocRef)
-        const role = userDoc.exists() ? userDoc.data().role : null
-        setUserRole(role)
+      const interval = setInterval(() => fetchMessages(currentRoomId), 5000)
+      return () => clearInterval(interval)
+    }
+  }, [patientEmailFromUrl, userRole, doctorEmail])
 
-        if (role === "admin" || role === "receptionist") {
-          if (patientEmailFromUrl) {
-            const sortedEmails = [doctorEmail, patientEmailFromUrl].sort()
-            const currentRoomId = `${sortedEmails[0]}_${sortedEmails[1]}`
-            setRoomId(currentRoomId)
-
-            const activeChatsRef = collection(db, "activeChats")
-            const q = query(activeChatsRef, where("patientEmail", "==", patientEmailFromUrl), where("status", "==", "active"))
-            const snapshot = await getDocs(q)
-
-            if (!snapshot.empty) {
-              const data = snapshot.docs[0].data()
-              setPreFormData({
-                name: data.patientName || patientEmailFromUrl.split("@")[0],
-                age: data.age || "",
-                gender: data.gender || "",
-                symptoms: data.symptoms || "",
-                contact: data.contact || "",
-                urgency: data.urgency || "",
-              })
-
-              const messagesRef = collection(db, "chats", currentRoomId, "messages")
-              const messagesQuery = query(messagesRef, orderBy("timestamp"))
-
-              const unsubMessages = onSnapshot(
-                messagesQuery,
-                (snapshot) => {
-                  const newMessages: MessageType[] = snapshot.docs.map((doc) => {
-                    const data = doc.data()
-                    return {
-                      id: doc.id,
-                      senderEmail: data.senderEmail || data.email || "unknown",
-                      text: data.text,
-                      timestamp: data.timestamp?.toDate(),
-                      mediaUrl: data.mediaUrl,
-                      mediaType: data.mediaType,
-                      fileName: data.fileName,
-                      uid: data.uid,
-                      photoURL: data.photoURL,
-                    } as MessageType
-                  })
-                  setMessages(newMessages)
-                },
-                (error) => {
-                  console.error("Error listening to messages: ", error)
-                  toast({
-                    title: "Error",
-                    description: "Failed to load messages. Please try again.",
-                    variant: "destructive",
-                  })
-                }
-              )
-              return () => unsubMessages()
-            } else {
-              toast({
-                title: "Error",
-                description: "No active chat found for this patient.",
-                variant: "destructive",
-              })
-              router.push("/admin/chat")
-            }
-          }
-        } else {
-          router.push("/")
-        }
-      } else {
-        router.push("/")
-      }
-    })
-
-    return () => unsubscribeAuth()
-  }, [router, searchParams, doctorEmail, patientEmailFromUrl])
-
-  if (!patientEmailFromUrl && (currentUser?.email === doctorEmail || userRole === "admin" || userRole === "receptionist")) {
+  if (!patientEmailFromUrl && (userRole === "admin" || userRole === "receptionist")) {
     return <PatientList />
   }
 
@@ -333,7 +179,7 @@ function LiveChatContent() {
             <div className="flex items-center space-x-2">
               <UserCheck className="h-5 w-5 text-green-600" />
               <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                Dr. Nitin Mishra - Dermatologist
+                Medical Clinic Doctor - Physician
               </span>
             </div>
           </div>
@@ -356,8 +202,8 @@ function LiveChatContent() {
                     <Stethoscope className="h-6 w-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">Dr. Nitin Mishra</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">MBBS, MD (Skin & VD)</p>
+                    <h3 className="font-semibold text-gray-900 dark:text-gray-100">Medical Clinic Doctor</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">MD, General Medicine</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -393,9 +239,9 @@ function LiveChatContent() {
                 )}
 
 
-                {messages.map((msg) => (
+                {messages.map((msg: any) => (
                   <div
-                    key={msg.id}
+                    key={msg.id || msg._id}
                     className={`flex ${msg.senderEmail === currentUser?.email ? "justify-end" : "justify-start"} mb-2`}
                   >
                     <div
@@ -415,26 +261,9 @@ function LiveChatContent() {
                           className="mt-2 rounded-md max-w-full max-h-64 object-contain"
                         />
                       )}
-                      {msg.mediaUrl && msg.mediaType === "video" && (
-                        <video
-                          controls
-                          src={msg.mediaUrl}
-                          className="mt-2 rounded-md max-w-full max-h-64 object-contain"
-                        />
-                      )}
-                      {msg.mediaUrl && msg.mediaType === "file" && (
-                        <a
-                          href={msg.mediaUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-2 underline text-sm block text-white"
-                        >
-                          📎 {msg.fileName || "File"}
-                        </a>
-                      )}
-
+                      
                       <p className="text-xs mt-1 opacity-70">
-                        {msg.timestamp?.toLocaleTimeString?.() ?? new Date().toLocaleTimeString()}
+                        {new Date(msg.timestamp).toLocaleTimeString()}
                       </p>
                     </div>
                   </div>
@@ -503,19 +332,19 @@ function LiveChatContent() {
             <CardContent className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Name:</span>
-                <span className="font-medium">{preFormData.name}</span>
+                <span className="font-medium">{preFormData.name || "N/A"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Age:</span>
-                <span className="font-medium">{preFormData.age}</span>
+                <span className="font-medium">{preFormData.age || "N/A"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Gender:</span>
-                <span className="font-medium capitalize">{preFormData.gender}</span>
+                <span className="font-medium capitalize">{preFormData.gender || "N/A"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Contact:</span>
-                <span className="font-medium">{preFormData.contact}</span>
+                <span className="font-medium">{preFormData.contact || "N/A"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600 dark:text-gray-400">Urgency:</span>
@@ -528,7 +357,7 @@ function LiveChatContent() {
                         : "secondary"
                   }
                 >
-                  {preFormData.urgency}
+                  {preFormData.urgency || "N/A"}
                 </Badge>
               </div>
             </CardContent>
@@ -542,7 +371,7 @@ function LiveChatContent() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-gray-800 dark:text-gray-300 leading-relaxed">{preFormData.symptoms}</p>
+              <p className="text-sm text-gray-800 dark:text-gray-300 leading-relaxed">{preFormData.symptoms || "N/A"}</p>
             </CardContent>
           </Card>
 

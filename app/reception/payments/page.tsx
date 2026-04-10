@@ -20,7 +20,7 @@ export default function PaymentsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Fetch payments from your API/Firebase
+    // Fetch payments from API
     setPayments([])
     setLoading(false)
   }, [])

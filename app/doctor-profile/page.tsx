@@ -26,18 +26,18 @@ export default function DoctorProfile() {
   const { darkMode, toggleDarkMode } = useDarkMode()
 
   const doctor = {
-    name: "Dr. Nitin Mishra",
-    specialization: "Dermatology, Venereology & Leprosy",
-    qualifications: "MBBS, MD (Skin & VD)",
+    name: "Medical Clinic Doctor",
+    specialization: "General Practice & Family Medicine",
+    qualifications: "MD, General Medicine",
     experience: "20+ years",
     rating: 4.9,
     reviews: 500,
     image: "/doctor.jpg", // Updated with actual image path
     about:
-      "Dr. Nitin Mishra is a highly experienced dermatologist with over 20 years of specialized practice in Dermatology, Venereology & Leprosy. He holds an MBBS degree and MD in Skin & VD, making him one of the most qualified skin specialists in Bareilly. Dr. Mishra has successfully treated thousands of patients with various skin conditions and is known for his expertise in advanced laser treatments, surgical procedures, and comprehensive skin care.",
+      "Medical Clinic Doctor is a highly experienced physician with over 20 years of specialized practice in General Practice & Family Medicine. He holds an MD in General Medicine, making him one of the most qualified physicians in the City Center. Our doctor has successfully treated thousands of patients with various medical conditions and is known for his expertise in advanced surgical procedures and comprehensive healthcare.",
     education: [
       "MBBS - Bachelor of Medicine and Bachelor of Surgery",
-      "MD (Skin & VD) - Doctor of Medicine in Dermatology, Venereology & Leprosy",
+      "MD - Doctor of Medicine in General Practice & Family Medicine",
       "Advanced Training in Laser Dermatology",
       "Certification in Cosmetic Dermatology",
     ],
@@ -57,16 +57,16 @@ export default function DoctorProfile() {
     consultationFee: 500,
     clinics: [
       {
-        name: "Rampur Garden Clinic",
-        address: "Rampur Garden, Bareilly",
+        name: "North Branch Clinic",
+        address: "North Branch, City Center",
         timings: {
           morning: "Mon-Sat: 10:00 AM - 2:00 PM",
           evening: "Mon-Fri: 6:00 PM - 8:00 PM",
         },
       },
       {
-        name: "DD Puram Clinic",
-        address: "DD Puram, Bareilly",
+        name: "South Branch Clinic",
+        address: "South Branch, City Center",
         timings: {
           afternoon: "Mon-Sat: 2:00 PM - 4:00 PM",
           evening: "Mon-Fri: 8:30 PM - 9:30 PM",
@@ -93,7 +93,7 @@ export default function DoctorProfile() {
                 <div className="w-8 h-8 bg-gradient-to-r from-indigo-600 to-teal-600 rounded-lg flex items-center justify-center">
                   <Stethoscope className="h-4 w-4 text-white" />
                 </div>
-                <span className="text-lg font-bold text-gray-900 dark:text-gray-100">Dr. Nitin Mishra</span>
+                <span className="text-lg font-bold text-gray-900 dark:text-gray-100">Medical Clinic Doctor</span>
               </div>
             </div>
 
@@ -210,7 +210,7 @@ export default function DoctorProfile() {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2 text-gray-900 dark:text-gray-100">
                   <Users className="h-5 w-5" />
-                  <span>About Dr. Nitin Mishra</span>
+                  <span>About Medical Clinic Doctor</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -311,14 +311,14 @@ export default function DoctorProfile() {
                   <Phone className="h-5 w-5 text-green-600 dark:text-green-400" />
                   <div>
                     <div className="font-medium text-gray-900 dark:text-gray-100">Call Now</div>
-                    <div className="text-green-600 dark:text-green-400 font-bold">9258924611</div>
+                    <div className="text-green-600 dark:text-green-400 font-bold">+1 (555) 123-4567</div>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3 p-3 bg-indigo-50 dark:bg-indigo-900 rounded-lg">
                   <Mail className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                   <div>
                     <div className="font-medium text-gray-900 dark:text-gray-100">Email</div>
-                    <div className="text-indigo-600 dark:text-indigo-400">dermanitin@gmail.com</div>
+                    <div className="text-indigo-600 dark:text-indigo-400">contact@medicalclinic.com</div>
                   </div>
                 </div>
               </CardContent>
@@ -337,7 +337,7 @@ export default function DoctorProfile() {
                   <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900 rounded-lg">
                     <div>
                       <div className="font-medium text-gray-900 dark:text-gray-100">10:00 AM - 2:00 PM</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Rampur Garden Clinic</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">North Branch Clinic</div>
                     </div>
                     <Badge className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
                       Available
@@ -346,7 +346,7 @@ export default function DoctorProfile() {
                   <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900 rounded-lg">
                     <div>
                       <div className="font-medium text-gray-900 dark:text-gray-100">6:00 PM - 8:00 PM</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Rampur Garden Clinic</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">North Branch Clinic</div>
                     </div>
                     <Badge className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
                       Available
@@ -355,7 +355,7 @@ export default function DoctorProfile() {
                   <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900 rounded-lg">
                     <div>
                       <div className="font-medium text-gray-900 dark:text-gray-100">2:00 PM - 4:00 PM</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">DD Puram Clinic</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">South Branch Clinic</div>
                     </div>
                     <Badge className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
                       Available
@@ -364,7 +364,7 @@ export default function DoctorProfile() {
                   <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900 rounded-lg">
                     <div>
                       <div className="font-medium text-gray-900 dark:text-gray-100">8:30 PM - 9:30 PM</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">DD Puram Clinic</div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">South Branch Clinic</div>
                     </div>
                     <Badge className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
                       Available
@@ -392,7 +392,7 @@ export default function DoctorProfile() {
                   </a>
                 </Button>
                 <Button variant="outline" className="w-full bg-white/50 dark:bg-gray-700/50" asChild>
-                  <a href="tel:9258924611">Call to Book</a>
+                  <a href="tel:+1 (555) 123-4567">Call to Book</a>
                 </Button>
               </CardContent>
             </Card>

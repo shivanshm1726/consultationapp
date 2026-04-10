@@ -1,108 +1,68 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { db } from "@/lib/firebase";
-import {
-  collection,
-  onSnapshot,
-  query,
-  where,
-  Timestamp,
-} from "firebase/firestore";
+import axios from "axios";
 
-type Notification = {
-  id: string;
-  name: string;
-  phone: string;
-  createdAt: Timestamp;
-  time: string; // <-- actual appointment time
-};
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
+const API_URL = `${API_BASE_URL}/api/appointments/all`;
 
 export function useTodayNotifications() {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [unread, setUnread] = useState(false);
   const [isUserInteracted, setIsUserInteracted] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const prevCountRef = useRef(0);
 
-  // Detect user interaction before playing sound
   useEffect(() => {
     const handleInteraction = () => {
       setIsUserInteracted(true);
       document.removeEventListener("click", handleInteraction);
-      document.removeEventListener("keydown", handleInteraction);
     };
-
     document.addEventListener("click", handleInteraction);
-    document.addEventListener("keydown", handleInteraction);
-
-    return () => {
-      document.removeEventListener("click", handleInteraction);
-      document.removeEventListener("keydown", handleInteraction);
-    };
+    return () => document.removeEventListener("click", handleInteraction);
   }, []);
 
-  // Subscribe to today's appointments
-  useEffect(() => {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const startTimestamp = Timestamp.fromDate(todayStart);
+  const fetchNotifications = async () => {
+    try {
+      const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+      const token = tokenMatch ? tokenMatch[1] : null;
 
-    const q = query(
-      collection(db, "appointments"),
-      where("createdAt", ">=", startTimestamp)
-    );
-
-    const unsub = onSnapshot(q, (snapshot) => {
-      const latest = snapshot.docs.map((doc) => {
-        const data = doc.data();
-
-        const formatTime = (value: any): string => {
-          if (typeof value === "string") return value;
-          if (value?.seconds) {
-            return new Date(value.seconds * 1000).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            });
-          }
-          return "N/A";
-        };
-
-        return {
-          id: doc.id,
-          name: `${data.firstName ?? "?"} ${data.lastName ?? ""}`,
-          phone: data.phone ?? "N/A",
-          createdAt: data.createdAt, // (you can still keep it if needed)
-          time: formatTime(data.time), // ✅ actual time slot selected
-        };
+      const response = await axios.get(API_URL, {
+        headers: { Authorization: `Bearer ${token}` }
       });
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-      // Sort by createdAt DESCENDING (newest first)
-      latest.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
+      const latest = response.data
+        .filter((apt: any) => new Date(apt.createdAt) >= today)
+        .map((apt: any) => ({
+          id: apt._id,
+          name: `${apt.patientId?.firstName ?? "?"} ${apt.patientId?.lastName ?? ""}`,
+          phone: apt.patientId?.phone ?? "N/A",
+          createdAt: apt.createdAt,
+          time: new Date(apt.appointmentDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }));
 
-      // Play sound only when a new appointment is added
-      try {
-        if (
-          latest.length > prevCountRef.current &&
-          prevCountRef.current > 0 &&
-          isUserInteracted &&
-          audioRef.current
-        ) {
-          audioRef.current.currentTime = 0;
-          audioRef.current.play().catch((e) => {
-            console.warn("Audio play failed:", e.message ?? e);
-          });
-          setUnread(true);
-        }
-      } catch (e: any) {
-        console.warn("Notification error:", e.message ?? e);
+      latest.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      if (latest.length > prevCountRef.current && prevCountRef.current > 0 && isUserInteracted && audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch(console.warn);
+        setUnread(true);
       }
 
       setNotifications(latest);
       prevCountRef.current = latest.length;
-    });
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+    }
+  };
 
-    return () => unsub();
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
+    return () => clearInterval(interval);
   }, [isUserInteracted]);
 
   const markAsRead = () => setUnread(false);

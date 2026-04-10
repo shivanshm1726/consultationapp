@@ -1,60 +1,39 @@
-// useUserRole.ts
+"use client";
+
 import { useEffect, useState } from "react";
-import { auth, db } from "@/lib/firebase";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { doc, setDoc, onSnapshot } from "firebase/firestore"; // getDoc is not needed if only using onSnapshot
-import { signOut } from "firebase/auth";
-import { useRouter } from "next/navigation"; // Import useRouter
+import { useAuth } from "@/contexts/auth-context";
+import { useRouter } from "next/navigation";
+import axios from "axios";
 
 export function useUserRole() {
-  const [user] = useAuthState(auth);
+  const { user, userData } = useAuth();
   const [role, setRole] = useState("patient");
   const [loading, setLoading] = useState(true);
-  const router = useRouter(); // Initialize useRouter
+  const router = useRouter();
 
   useEffect(() => {
-    if (!user) {
+    if (userData) {
+      setRole(userData.role || "patient");
       setLoading(false);
-      return;
+    } else if (!user) {
+      setLoading(false);
     }
-
-    const userRef = doc(db, "users", user.uid);
-
-    const unsubscribe = onSnapshot(userRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        setRole(data.role || "patient");
-
-        if (data.forceLogout) {
-          // Reset forceLogout flag and then sign out/redirect
-          setDoc(userRef, { forceLogout: false }, { merge: true })
-            .then(() => {
-              console.log("forceLogout flag reset. Signing out...");
-              return signOut(auth); // Initiate sign out
-            })
-            .then(() => {
-              console.log("User signed out. Redirecting to /login...");
-              router.push("/login"); // Use Next.js router for client-side navigation
-            })
-            .catch((error) => {
-              console.error("Error during force logout process:", error);
-              // Handle errors, maybe show a message to the user
-            });
-        }
-      }
-      setLoading(false);
-    }, (error) => {
-      console.error("Error in user document listener:", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [user, router]); // Add router to dependency array
+  }, [user, userData]);
 
   const updateRole = async (newRole: string) => {
     if (!user) return;
-    await setDoc(doc(db, "users", user.uid), { role: newRole }, { merge: true });
-    setRole(newRole);
+    try {
+      const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+      const token = tokenMatch ? tokenMatch[1] : null;
+
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
+      await axios.put(`${API_BASE_URL}/api/users/${user.uid}/role`, { role: newRole }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setRole(newRole);
+    } catch (error) {
+      console.error("Error updating role:", error);
+    }
   };
 
   return { role, updateRole, loading };

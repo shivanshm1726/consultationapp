@@ -65,7 +65,7 @@ export default function GalleryPage() {
                   <h1 className={`text-lg font-bold ${darkMode ? "text-slate-100" : "text-blue-900"}`}>
                     Clinic Gallery
                   </h1>
-                  <p className="text-sm text-blue-600">Dr. Nitin Mishra</p>
+                  <p className="text-sm text-blue-600">Medical Clinic Doctor</p>
                 </div>
               </div>
             </div>

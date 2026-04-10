@@ -4,15 +4,8 @@
 import { useDarkMode } from "@/contexts/dark-mode-context"
 
 export function DarkModeInitializer() {
-  const { isInitialized } = useDarkMode()
-  
-  if (!isInitialized) {
-    return (
-      <div className="fixed inset-0 bg-background z-50 flex items-center justify-center">
-        <div className="animate-pulse">Loading theme...</div>
-      </div>
-    )
-  }
-  
+  // This component just ensures the dark mode context is initialized
+  // No blocking overlay needed - the theme will apply once the effect runs
+  useDarkMode()
   return null
 }

@@ -1,80 +1,68 @@
-// src/lib/auth.ts
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
-import { doc, setDoc, getDoc } from "firebase/firestore";
-import { auth, db } from "./firebase";
+import axios from 'axios';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
+const API_URL = `${API_BASE_URL}/api/auth`;
 
 export interface UserData {
-  uid: string;
+  _id: string; // Used by MongoDB instead of uid
+  uid: string; // Legacy fallback
   email: string;
   fullName: string;
   age: number;
-  createdAt: Date;
+  phone?: string;
   role?: "admin" | "receptionist" | "patient";
-  phone?: string; // Added optional phone field
+  isAvailableOnline?: boolean;
+  token?: string;
 }
 
 export const registerUser = async (email: string, password: string, fullName: string, age: number, phone?: string) => {
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-
-    await updateProfile(user, { displayName: fullName });
-
-    const userData: UserData = {
-      uid: user.uid,
-      email: user.email!,
+    const response = await axios.post(`${API_URL}/register`, {
+      email,
+      password,
       fullName,
       age,
-      createdAt: new Date(),
-      phone, // Include phone if provided
-    };
-
-    await setDoc(doc(db, "users", user.uid), userData);
-
-    return { user, userData };
+      phone,
+    });
+    
+    if (response.data.token) {
+      document.cookie = `token=${response.data.token}; path=/`;
+    }
+    return { user: { uid: response.data._id, ...response.data }, userData: response.data };
   } catch (error: any) {
-    throw new Error(error.message);
+    throw new Error(error.response?.data?.message || error.message);
   }
 };
 
 export const loginUser = async (email: string, password: string) => {
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    return userCredential.user;
+    const response = await axios.post(`${API_URL}/login`, { email, password });
+    if (response.data.token) {
+      document.cookie = `token=${response.data.token}; path=/`;
+    }
+    return { uid: response.data._id, ...response.data };
   } catch (error: any) {
-    throw new Error(error.message);
+    throw new Error(error.response?.data?.message || error.message);
   }
 };
 
 export const logoutUser = async () => {
   try {
-    await signOut(auth);
     document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
   } catch (error: any) {
     throw new Error(error.message);
   }
 };
 
-export const getUserData = async (uid: string): Promise<UserData | null> => {
+export const getUserData = async (token: string): Promise<UserData | null> => {
   try {
-    const docRef = doc(db, "users", uid);
-    const docSnap = await getDoc(docRef);
-
-    if (docSnap.exists()) {
-      return docSnap.data() as UserData;
-    } else {
-      return null;
-    }
+    const response = await axios.get(`${API_URL}/profile`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    return { uid: response.data._id, ...response.data };
   } catch (error: any) {
-    throw new Error(error.message);
-  }
-};
-
-// Optional: Add a function to update user data
-export const updateUserData = async (uid: string, data: Partial<UserData>) => {
-  try {
-    await setDoc(doc(db, "users", uid), data, { merge: true });
-  } catch (error: any) {
-    throw new Error(error.message);
+    return null;
   }
 };
