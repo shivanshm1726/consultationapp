@@ -5,11 +5,21 @@ const messageSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  senderEmail: {
-    type: String,
+  senderId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
     required: true,
   },
-  text: {
+  receiverId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  appointmentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Appointment',
+  },
+  message: {
     type: String,
   },
   mediaUrl: {

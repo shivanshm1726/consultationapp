@@ -16,7 +16,7 @@ const CALLS_API = "http://localhost:5001/api/calls";
 const AdminCallPage = () => {
   const { user } = useAuth()
   const searchParams = useSearchParams()
-  const channelName = searchParams.get("channel")
+  const channelName = searchParams.get("roomId")
   const callType = searchParams.get("type") || "video"
   const callId = searchParams.get("callId")
   const router = useRouter()

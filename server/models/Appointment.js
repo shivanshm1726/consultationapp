@@ -23,10 +23,14 @@ const appointmentSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  timeSlot: {
+    type: String, // HH:mm format
+    required: true,
+  },
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'completed', 'cancelled'],
-    default: 'pending',
+    enum: ['scheduled', 'in-progress', 'completed', 'cancelled'],
+    default: 'scheduled',
   },
   priority: {
     type: String,

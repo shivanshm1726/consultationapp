@@ -28,9 +28,9 @@ const CALL_API = "http://localhost:5001/api/calls";
 const PatientCallPage = () => {
   const { user, userData } = useAuth();
   const searchParams = useSearchParams();
-  const channelNameFromUrl = searchParams.get("channel");
+  const channelNameFromUrl = searchParams.get("roomId");
   const callType = searchParams.get("type") || "video";
-  const [callId, setCallId] = useState<string | null>(searchParams.get("callId"));
+  const [callId, setCallId] = useState<string | null>(searchParams.get("roomId")); // using roomId as the explicit identifier
   const router = useRouter();
 
   const localVideoRef = useRef<HTMLDivElement>(null);

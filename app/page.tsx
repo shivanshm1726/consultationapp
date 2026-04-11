@@ -123,10 +123,8 @@ export default function HomePage() {
   };
 
   const handleChatClick = () => {
-    if (user && activePatient) {
-      router.push("/chat");
-    } else if (user) {
-      alert("Please select a patient first");
+    if (user) {
+      router.push("/profile");
     } else {
       router.push("/login");
     }

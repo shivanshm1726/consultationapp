@@ -148,3 +148,12 @@ export const toggleAvailability = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+export const getDoctors = async (req, res) => {
+  try {
+    const doctors = await User.find({ role: { $in: ['admin', 'superadmin'] } }).select('-password');
+    res.json(doctors);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

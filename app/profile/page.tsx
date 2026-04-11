@@ -30,10 +30,17 @@ export default function ProfilePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [myAppointments, setMyAppointments] = useState<any[]>([]);
 
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login");
+    } else if (user) {
+       const tokenMatch = document.cookie.match(/(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/);
+       const token = tokenMatch ? tokenMatch[1] : null;
+       axios.get("http://localhost:5001/api/appointments", { headers: { Authorization: `Bearer ${token}` } })
+         .then(res => setMyAppointments(res.data))
+         .catch(console.error)
     }
   }, [user, loading, router]);
 
@@ -167,6 +174,49 @@ export default function ProfilePage() {
             </Button>
           </form>
         </Card>
+
+        {/* Patient Appointments Dashboard */}
+        <div className="max-w-4xl mx-auto mt-12">
+           <h2 className={`text-2xl font-bold mb-6 ${darkMode ? "text-white" : "text-gray-900"}`}>My Appointments</h2>
+           {myAppointments.length > 0 ? (
+             <div className="grid gap-4">
+                {myAppointments.map((apt: any) => (
+                  <Card key={apt._id} className={`p-6 ${darkMode ? "bg-slate-800 border-slate-700 text-white" : "bg-white"}`}>
+                     <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                        <div>
+                           <h3 className="font-bold text-lg">{new Date(apt.appointmentDate).toDateString()}</h3>
+                           <p className="opacity-70">Time Slot: {apt.timeSlot}</p>
+                           <p className="opacity-70 mt-2 text-sm italic">Reason: {apt.reason}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-3">
+                           <div className="capitalize px-3 py-1 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-700">
+                             {apt.status}
+                           </div>
+                           {apt.status === 'in-progress' && (
+                             <Link href={`/call?roomId=${apt._id}&type=video`}>
+                               <Button className="bg-emerald-600 hover:bg-emerald-700 animate-pulse text-white shadow-lg shadow-emerald-500/20">
+                                 Join Video Call
+                               </Button>
+                             </Link>
+                           )}
+                           <Link href={`/chat?appointmentId=${apt._id}`}>
+                             <Button variant="outline">Consultation Chat</Button>
+                           </Link>
+                        </div>
+                     </div>
+                  </Card>
+                ))}
+             </div>
+           ) : (
+             <Card className={`p-8 text-center opacity-70 ${darkMode ? "bg-slate-800 border-slate-700" : "bg-white"}`}>
+                No appointments found. <br/><br/>
+                <Link href="/appointment">
+                  <Button>Book Appointment</Button>
+                </Link>
+             </Card>
+           )}
+        </div>
+
       </div>
     </div>
   );

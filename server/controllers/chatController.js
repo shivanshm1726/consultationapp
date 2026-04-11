@@ -12,15 +12,23 @@ export const getMessages = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
   try {
-    const { roomId, text, mediaUrl, mediaType, fileName } = req.body;
+    const { roomId, text, mediaUrl, mediaType, fileName, receiverId } = req.body;
     const message = await Message.create({
       roomId,
-      senderEmail: req.user.email,
+      senderId: req.user.id,
+      receiverId: receiverId || req.user.id, // Fallback if missing, but should be sent
       text,
       mediaUrl,
       mediaType,
       fileName,
     });
+    
+    // Broadcast message
+    const io = req.app.get('io');
+    if (io) {
+       io.to(roomId).emit('new_message', message);
+    }
+
     res.status(201).json(message);
   } catch (error) {
     res.status(500).json({ message: error.message });

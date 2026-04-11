@@ -41,6 +41,11 @@ io.on('connection', (socket) => {
     console.log(`Socket ${socket.id} joined queue room ${room}`);
   });
 
+  socket.on('join_chat', ({ roomId }) => {
+    socket.join(roomId);
+    console.log(`Socket ${socket.id} joined chat room ${roomId}`);
+  });
+
   socket.on('disconnect', () => {
     console.log('User disconnected', socket.id);
   });
