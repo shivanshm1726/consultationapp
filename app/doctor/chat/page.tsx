@@ -117,7 +117,7 @@ function LiveChatContent() {
 
   const handleCall = async (type: "audio" | "video") => {
     if (!roomId || !currentUser) return
-    router.push(`/admin/call?roomId=${roomId}&type=${type}`)
+    router.push(`/doctor/call?roomId=${roomId}&type=${type}`)
   }
 
   if (!roomId || !appointmentData) {
@@ -126,7 +126,7 @@ function LiveChatContent() {
          <Card className="max-w-md w-full border-0 shadow-lg p-6">
             <h2 className="text-xl font-bold mb-4">Select a Consultation</h2>
             <p className="text-slate-500 mb-6">You must select an appointment from the dashboard to start chatting.</p>
-            <Button onClick={() => router.push("/admin/appointments")} className="bg-emerald-600 text-white">Go to Dashboard</Button>
+            <Button onClick={() => router.push("/doctor/appointments")} className="bg-emerald-600 text-white">Go to Appointments</Button>
          </Card>
       </div>
     )
@@ -139,7 +139,7 @@ function LiveChatContent() {
       <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md shadow-sm border-b border-slate-200 dark:border-slate-700 sticky top-0 z-50">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center space-x-4">
-             <Button variant="ghost" size="sm" onClick={() => router.push("/admin/appointments")}>
+             <Button variant="ghost" size="sm" onClick={() => router.push("/doctor/appointments")}>
                 <ArrowLeft className="h-4 w-4 mr-2" /> Back
              </Button>
              <div className="flex items-center space-x-2">

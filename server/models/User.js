@@ -25,7 +25,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['superadmin', 'admin', 'receptionist', 'patient'],
+    enum: ['admin', 'doctor', 'receptionist', 'patient'],
     default: 'patient',
   },
   clinicId: {
@@ -36,6 +36,13 @@ const userSchema = new mongoose.Schema({
   isAvailableOnline: {
     type: Boolean,
     default: true,
+  },
+  isApproved: {
+    type: Boolean,
+    default: true, // Will default to true for old users, explicitly set to false for doctors during registration
+  },
+  specialization: {
+    type: String,
   }
 }, { timestamps: true });
 

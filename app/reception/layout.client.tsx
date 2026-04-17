@@ -16,7 +16,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar"
-import { LayoutDashboard, LogOut, Bell, ClipboardList, Wallet, CalendarDays, Users } from "lucide-react"
+import { LayoutDashboard, LogOut, Bell, ClipboardList, Wallet, CalendarDays, Users, CalendarClock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -70,6 +70,12 @@ export default function ReceptionLayout({ children }: ReceptionLayoutProps) {
       icon: Users,
       href: "/reception/queue",
       isActive: pathname === "/reception/queue",
+    },
+    {
+      title: "Doctor Timings",
+      icon: CalendarClock,
+      href: "/reception/schedules",
+      isActive: pathname === "/reception/schedules",
     },
   ]
 

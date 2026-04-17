@@ -163,12 +163,12 @@ export default function AppointmentsPage() {
                      </div>
                   </div>
                   <div className="flex gap-3">
-                     <Link href={`/admin/chat?appointmentId=${activePatient.id}`}>
+                     <Link href={`/doctor/chat?appointmentId=${activePatient.id}`}>
                         <Button className="bg-slate-800 hover:bg-slate-900 text-white shadow-lg">
                            <MessageCircle className="w-4 h-4 mr-2" /> Chat
                         </Button>
                      </Link>
-                     <Link href={`/admin/call?roomId=${activePatient.id}`}>
+                     <Link href={`/doctor/call?roomId=${activePatient.id}`}>
                         <Button className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg">
                            <Video className="w-4 h-4 mr-2" /> Join Video Call
                         </Button>

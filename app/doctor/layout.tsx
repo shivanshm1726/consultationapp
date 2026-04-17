@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import AdminLayoutClient from "./layout.client";
+import DoctorLayout from "./layout.client";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
     const cookieStore = await cookies();
@@ -22,11 +22,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
         const userData = await response.json();
         
-        if (userData.role !== "admin") {
+        if (!["doctor", "admin", "superadmin"].includes(userData.role)) {
             redirect("/unauthorized");
         }
 
-        return <AdminLayoutClient>{children}</AdminLayoutClient>;
+        return <DoctorLayout>{children}</DoctorLayout>;
     } catch (error) {
         console.error("Admin layout verification error:", error);
         redirect("/login");

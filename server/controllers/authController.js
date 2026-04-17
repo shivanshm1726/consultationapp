@@ -57,6 +57,40 @@ export const registerUser = async (req, res) => {
   }
 };
 
+export const registerDoctor = async (req, res) => {
+  try {
+    const { fullName, email, password, specialization } = req.body;
+
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      return res.status(400).json({ message: 'User already exists' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const user = await User.create({
+      fullName,
+      email,
+      password: hashedPassword,
+      specialization,
+      role: 'doctor',
+      isApproved: false,
+      age: 30, // Dummy required field, frontend might provide or we hardcode defaults since standard doctors shouldn't fail schema
+    });
+
+    if (user) {
+      res.status(201).json({
+        message: 'Registration successful. Waiting for admin approval.',
+      });
+    } else {
+      res.status(400).json({ message: 'Invalid professional data' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -64,6 +98,11 @@ export const loginUser = async (req, res) => {
     const user = await User.findOne({ email });
 
     if (user && (await bcrypt.compare(password, user.password))) {
+      // Check for Doctor approval status (both new 'doctor' role and legacy 'admin' doctors if transitioning)
+      if (user.role === 'doctor' && user.isApproved === false) {
+        return res.status(403).json({ message: 'Your account is pending admin approval' });
+      }
+
       res.json({
         _id: user._id,
         email: user.email,
@@ -151,7 +190,7 @@ export const toggleAvailability = async (req, res) => {
 
 export const getDoctors = async (req, res) => {
   try {
-    const doctors = await User.find({ role: { $in: ['admin', 'superadmin'] } }).select('-password');
+    const doctors = await User.find({ role: { $in: ['admin', 'doctor'] }, isApproved: true }).select('-password');
     res.json(doctors);
   } catch (error) {
     res.status(500).json({ message: error.message });

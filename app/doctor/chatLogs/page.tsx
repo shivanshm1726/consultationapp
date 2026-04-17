@@ -45,6 +45,9 @@ export default function ChatsAndCallsManagement() {
   const [typeFilter, setTypeFilter] = useState("all")
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
   const [selectedSessionMessages, setSelectedSessionMessages] = useState<ChatMessage[]>([])
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+  const [replyText, setReplyText] = useState("")
+  const [isReplying, setIsReplying] = useState(false)
   const { user } = useAuth()
 
   const fetchSessions = async () => {
@@ -97,14 +100,42 @@ export default function ChatsAndCallsManagement() {
       setSelectedSessionMessages(response.data.map((m: any) => ({
         id: m._id,
         text: m.text,
-        senderEmail: m.senderEmail,
+        senderEmail: m.senderEmail || (m.senderId === user?.userId ? 'medicalclinic' : 'patient'),
         timestamp: m.timestamp,
         mediaUrl: m.mediaUrl,
         mediaType: m.mediaType,
         fileName: m.fileName
       })));
+      setActiveSessionId(roomId);
     } catch (error) {
       console.error("Error fetching messages:", error)
+    }
+  }
+
+  const handleReply = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!replyText.trim() || !activeSessionId) return
+
+    setIsReplying(true)
+    try {
+      const tokenMatch = document.cookie.match(/(?:(?:^|.*;\\s*)token\\s*\\=\\s*([^;]*).*$)|^.*$/)
+      const token = tokenMatch ? tokenMatch[1] : null
+
+      await axios.post(`${CHAT_API}`, {
+        roomId: activeSessionId,
+        text: replyText.trim(),
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      setReplyText("")
+      // Refresh messages
+      fetchMessagesForSession(activeSessionId)
+    } catch (err) {
+      console.error("Error sending reply:", err)
+      toast({ title: "Failed to send message", variant: "destructive" })
+    } finally {
+      setIsReplying(false)
     }
   }
 
@@ -230,6 +261,18 @@ export default function ChatsAndCallsManagement() {
                             </div>
                           ))}
                         </div>
+                        <form onSubmit={handleReply} className="flex items-center space-x-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+                          <Input
+                            placeholder="Type your reply to the patient..."
+                            value={replyText}
+                            onChange={(e) => setReplyText(e.target.value)}
+                            disabled={isReplying}
+                            className="flex-1"
+                          />
+                          <Button type="submit" disabled={isReplying || !replyText.trim()} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                            {isReplying ? 'Sending...' : 'Send Reply'}
+                          </Button>
+                        </form>
                       </div>
                     </DialogContent>
                   </Dialog>

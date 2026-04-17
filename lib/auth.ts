@@ -10,8 +10,9 @@ export interface UserData {
   fullName: string;
   age: number;
   phone?: string;
-  role?: "admin" | "receptionist" | "patient";
+  role?: "admin" | "receptionist" | "patient" | "doctor";
   isAvailableOnline?: boolean;
+  clinicId?: string;
   token?: string;
 }
 

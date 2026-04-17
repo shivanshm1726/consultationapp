@@ -359,7 +359,7 @@ export default function TreatmentsPage() {
                     Book Appointment
                   </Button>
                 </Link>
-                <Link href="/chat">
+                <Link href="/profile">
                   <Button variant="outline" size="lg" className="bg-transparent">
                     Start Live Chat
                   </Button>

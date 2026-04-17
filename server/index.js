@@ -15,8 +15,7 @@ import settingRoutes from './routes/settingRoutes.js';
 import clinicRoutes from './routes/clinicRoutes.js';
 import scheduleRoutes from './routes/scheduleRoutes.js';
 import queueRoutes from './routes/queueRoutes.js';
-
-dotenv.config();
+import adminRoutes from './routes/adminRoutes.js';
 
 dotenv.config();
 
@@ -66,6 +65,7 @@ app.use('/api/settings', settingRoutes);
 app.use('/api/clinics', clinicRoutes);
 app.use('/api/schedule', scheduleRoutes);
 app.use('/api/queue', queueRoutes);
+app.use('/api/admin', adminRoutes);
 
 // MongoDB Connection
 const PORT = process.env.PORT || 5001;

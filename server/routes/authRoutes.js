@@ -1,10 +1,11 @@
 import express from 'express';
-import { registerUser, loginUser, getUserProfile, updateRoleByEmail, updateUserProfile, toggleAvailability, getDoctors } from '../controllers/authController.js';
+import { registerUser, loginUser, getUserProfile, updateRoleByEmail, updateUserProfile, toggleAvailability, getDoctors, registerDoctor } from '../controllers/authController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
 router.post('/register', registerUser);
+router.post('/register-doctor', registerDoctor);
 router.post('/login', loginUser);
 router.get('/profile', protect, getUserProfile);
 router.put('/profile', protect, updateUserProfile);

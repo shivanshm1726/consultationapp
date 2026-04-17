@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Users, BellRing, ArrowRight } from "lucide-react"
 import axios from "axios"
+import { motion } from "framer-motion"
 
 interface QueueBoardProps {
   doctorId: string

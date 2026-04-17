@@ -4,48 +4,49 @@ import type React from "react";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Stethoscope, User, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, User, Eye, EyeOff, Activity, UserPlus, Shield, Fingerprint, Sun, Moon } from "lucide-react";
 import { registerUser } from "@/lib/auth";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
+import { useDarkMode } from "@/contexts/dark-mode-context";
+import { motion } from "framer-motion";
 
 export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [formData, setFormData] = useState({
     fullName: "",
     age: "",
     email: "",
     password: "",
     confirmPassword: "",
-    phone: "", // Added phone field
+    phone: "",
   });
   const [errors, setErrors] = useState({
     age: "",
     password: "",
     confirmPassword: "",
-    phone: "", // Added phone error
+    phone: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
   const { user } = useAuth();
+  const { darkMode, toggleDarkMode } = useDarkMode();
 
-  // Redirect if already logged in
+  useEffect(() => { setMounted(true); }, []);
+
   useEffect(() => {
-    if (user) {
-      router.push("/");
-    }
+    if (user) router.push("/");
   }, [user, router]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    setError(""); // Clear general error when user types
+    setError("");
 
-    // Validate age
     if (field === "age") {
       const ageNum = Number.parseInt(value);
       if (value && (ageNum < 5 || ageNum > 100)) {
@@ -55,7 +56,6 @@ export default function RegisterPage() {
       }
     }
 
-    // Validate password match
     if (field === "password" || field === "confirmPassword") {
       const password = field === "password" ? value : formData.password;
       const confirmPassword = field === "confirmPassword" ? value : formData.confirmPassword;
@@ -66,10 +66,9 @@ export default function RegisterPage() {
       }
     }
 
-    // Validate phone (optional, basic format check)
     if (field === "phone") {
       if (value && !/^\+?\d{0,12}$/.test(value)) {
-        setErrors((prev) => ({ ...prev, phone: "Enter a valid phone number (up to 12 digits)" }));
+        setErrors((prev) => ({ ...prev, phone: "Enter a valid phone number" }));
       } else {
         setErrors((prev) => ({ ...prev, phone: "" }));
       }
@@ -81,7 +80,6 @@ export default function RegisterPage() {
     setLoading(true);
     setError("");
 
-    // Basic validation
     if (formData.password !== formData.confirmPassword) {
       setErrors((prev) => ({ ...prev, confirmPassword: "Passwords do not match" }));
       setLoading(false);
@@ -95,21 +93,9 @@ export default function RegisterPage() {
       return;
     }
 
-    if (formData.phone && !/^\+?\d{0,12}$/.test(formData.phone)) {
-      setErrors((prev) => ({ ...prev, phone: "Enter a valid phone number (up to 12 digits)" }));
-      setLoading(false);
-      return;
-    }
-
     try {
-      await registerUser(
-        formData.email,
-        formData.password,
-        formData.fullName,
-        ageNum,
-        formData.phone || undefined // Pass undefined if phone is empty
-      );
-      router.push("/"); // Redirect to home page after successful registration
+      await registerUser(formData.email, formData.password, formData.fullName, ageNum, formData.phone || undefined);
+      window.location.href = "/";
     } catch (error: any) {
       setError(error.message || "Registration failed. Please try again.");
     } finally {
@@ -118,110 +104,119 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
-      {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md shadow-sm border-b dark:bg-slate-800/80 dark:border-slate-700">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link href="/">
-                <Button variant="ghost" size="sm" className="group">
-                  <ArrowLeft className="h-4 w-4 mr-2 group-hover:-translate-x-1 transition-transform" />
-                  Back to Home
-                </Button>
-              </Link>
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg flex items-center justify-center">
-                  <Stethoscope className="h-4 w-4 text-white" />
-                </div>
-                <span className="text-lg font-bold text-blue-900 dark:text-slate-100">Register</span>
-              </div>
+    <div className={`min-h-screen transition-colors duration-500 font-sans ${darkMode ? "dark bg-[#030303]" : "bg-slate-50"}`}>
+
+      {/* Background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] opacity-30 dark:opacity-20 mix-blend-screen pointer-events-none blur-[120px] rounded-full bg-gradient-to-r from-emerald-500/80 to-teal-800/20" />
+      </div>
+
+      {/* Floating Navigation */}
+      <header className="fixed top-6 left-0 right-0 z-50 flex justify-center">
+        <div className="transition-all duration-500 mx-4 w-full max-w-3xl rounded-2xl border flex items-center justify-between px-6 py-3 shadow-2xl backdrop-blur-xl bg-white/80 border-slate-200 dark:bg-[#0a0a0a]/80 dark:border-white/10">
+          <Link href="/" className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-xl flex items-center justify-center border border-white/20 shadow-lg">
+              <Activity className="h-4 w-4 text-white" />
             </div>
+            <span className="font-semibold text-slate-900 dark:text-white hidden sm:block">Nexus Health</span>
+          </Link>
+          <div className="flex items-center gap-3">
+            {mounted && (
+              <button onClick={toggleDarkMode} className="p-2 rounded-full text-slate-500 hover:bg-slate-200/50 dark:text-slate-400 dark:hover:bg-white/5 transition-all">
+                {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+            )}
+            <Link href="/login">
+              <Button variant="ghost" size="sm" className="text-slate-600 dark:text-slate-400 hover:text-emerald-500 dark:hover:text-emerald-400">
+                <ArrowLeft className="h-4 w-4 mr-2" /> Sign In
+              </Button>
+            </Link>
           </div>
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-12">
-        <div className="max-w-md mx-auto">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-blue-700 rounded-full flex items-center justify-center mx-auto mb-4">
-              <User className="h-8 w-8 text-white" />
+      {/* Register Form */}
+      <section className="relative pt-36 pb-20 px-4 z-10 flex flex-col items-center justify-center min-h-screen">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="w-full max-w-md space-y-8"
+        >
+          {/* Header */}
+          <div className="text-center space-y-3">
+            <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-2xl flex items-center justify-center mx-auto shadow-xl border border-white/20">
+              <UserPlus className="h-7 w-7 text-white" />
             </div>
-            <h1 className="text-3xl font-bold text-blue-900 dark:text-slate-100 mb-2">Create Account</h1>
-            <p className="text-gray-600 dark:text-gray-400">Join us to access our medical services</p>
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+              Create <span className="bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-teal-500">Account</span>
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Join the platform to access medical services</p>
           </div>
 
-          <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-md hover:shadow-xl transition-transform hover:scale-[1.02] dark:bg-slate-800/70 dark:border-slate-700">
-            <CardHeader>
-              <CardTitle className="text-center text-blue-900 dark:text-slate-100">Patient Registration</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="fullName" className="text-blue-900 dark:text-slate-200">
-                    Full Name *
-                  </Label>
+          {/* Form Card */}
+          <div className="relative overflow-hidden rounded-3xl bg-white dark:bg-[#0a0a0a] border border-slate-200 dark:border-white/5 shadow-2xl">
+            <div className="h-1.5 bg-gradient-to-r from-emerald-400 to-teal-500" />
+            
+            <div className="p-8">
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Full Name *</Label>
                   <Input
                     id="fullName"
                     value={formData.fullName}
                     onChange={(e) => handleInputChange("fullName", e.target.value)}
                     required
-                    className="bg-white/50 dark:bg-slate-700 dark:text-slate-50"
+                    className="h-12 bg-slate-50 dark:bg-black/50 border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white"
                     placeholder="Enter your full name"
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="age" className="text-blue-900 dark:text-slate-200">
-                    Age *
-                  </Label>
-                  <Input
-                    id="age"
-                    type="number"
-                    value={formData.age}
-                    onChange={(e) => handleInputChange("age", e.target.value)}
-                    required
-                    className="bg-white/50 dark:bg-slate-700 dark:text-slate-50"
-                    min="5"
-                    max="100"
-                    placeholder="Your age"
-                  />
-                  {errors.age && <p className="text-red-600 text-sm mt-1">{errors.age}</p>}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Age *</Label>
+                    <Input
+                      id="age"
+                      type="number"
+                      value={formData.age}
+                      onChange={(e) => handleInputChange("age", e.target.value)}
+                      required
+                      min="5"
+                      max="100"
+                      className="h-12 bg-slate-50 dark:bg-black/50 border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white"
+                      placeholder="Age"
+                    />
+                    {errors.age && <p className="text-red-400 text-xs">{errors.age}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Phone</Label>
+                    <Input
+                      id="phone"
+                      value={formData.phone}
+                      onChange={(e) => handleInputChange("phone", e.target.value)}
+                      className="h-12 bg-slate-50 dark:bg-black/50 border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white"
+                      placeholder="Optional"
+                    />
+                    {errors.phone && <p className="text-red-400 text-xs">{errors.phone}</p>}
+                  </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="phone" className="text-blue-900 dark:text-slate-200">
-                    Phone Number (Optional)
-                  </Label>
-                  <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => handleInputChange("phone", e.target.value)}
-                    className="bg-white/50 dark:bg-slate-700 dark:text-slate-50"
-                    placeholder="Enter your phone number"
-                  />
-                  {errors.phone && <p className="text-red-600 text-sm mt-1">{errors.phone}</p>}
-                </div>
-
-                <div>
-                  <Label htmlFor="email" className="text-blue-900 dark:text-slate-200">
-                    Email Address *
-                  </Label>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Email *</Label>
                   <Input
                     id="email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => handleInputChange("email", e.target.value)}
                     required
-                    className="bg-white/50 dark:bg-slate-700 dark:text-slate-50"
+                    className="h-12 bg-slate-50 dark:bg-black/50 border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white"
                     placeholder="your.email@example.com"
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="password" className="text-blue-900 dark:text-slate-200">
-                    Password *
-                  </Label>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Password *</Label>
                   <div className="relative">
                     <Input
                       id="password"
@@ -229,25 +224,17 @@ export default function RegisterPage() {
                       value={formData.password}
                       onChange={(e) => handleInputChange("password", e.target.value)}
                       required
-                      className="bg-white/50 dark:bg-slate-700 dark:text-slate-50 pr-10"
+                      className="h-12 pr-11 bg-slate-50 dark:bg-black/50 border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white"
                       placeholder="Create a password"
                     />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
+                    <Button type="button" variant="ghost" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0 text-slate-400" onClick={() => setShowPassword(!showPassword)}>
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="confirmPassword" className="text-blue-900 dark:text-slate-200">
-                    Confirm Password *
-                  </Label>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Confirm Password *</Label>
                   <div className="relative">
                     <Input
                       id="confirmPassword"
@@ -255,68 +242,59 @@ export default function RegisterPage() {
                       value={formData.confirmPassword}
                       onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
                       required
-                      className="bg-white/50 dark:bg-slate-700 dark:text-slate-50 pr-10"
-                      placeholder="Confirm your password"
+                      className="h-12 pr-11 bg-slate-50 dark:bg-black/50 border-slate-200 dark:border-white/10 rounded-xl text-slate-900 dark:text-white"
+                      placeholder="Confirm password"
                     />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    >
+                    <Button type="button" variant="ghost" size="sm" className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0 text-slate-400" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
-                  {errors.confirmPassword && <p className="text-red-600 text-sm mt-1">{errors.confirmPassword}</p>}
+                  {errors.confirmPassword && <p className="text-red-400 text-xs">{errors.confirmPassword}</p>}
                 </div>
 
-                {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">{error}</div>}
+                {error && (
+                  <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 px-4 py-3 rounded-xl">
+                    {error}
+                  </div>
+                )}
 
                 <Button
                   type="submit"
                   disabled={loading || !!errors.age || !!errors.confirmPassword || !!errors.phone}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg disabled:bg-blue-400"
+                  className="w-full h-12 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 text-white shadow-xl hover:opacity-90 transition-all font-semibold text-sm tracking-wide disabled:opacity-40"
                   size="lg"
                 >
-                  {loading ? "Registering..." : "Register"}
+                  {loading ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Creating Account...
+                    </div>
+                  ) : (
+                    "Create Patient Account"
+                  )}
                 </Button>
 
-                <div className="text-center">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Already have an account?{" "}
-                    <Link
-                      href="/login"
-                      className="text-blue-600 hover:text-blue-700 font-medium dark:text-blue-400 dark:hover:text-blue-300"
-                    >
-                      Sign in here
-                    </Link>
-                  </p>
-                </div>
+                <p className="text-center text-sm text-slate-500 dark:text-slate-400">
+                  Already have an account?{" "}
+                  <Link href="/login" className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 font-semibold">
+                    Sign in here
+                  </Link>
+                </p>
               </form>
-            </CardContent>
-          </Card>
-
-          {/* Quick Contact */}
-          <div className="mt-8 text-center">
-            <p className="text-sm text-gray-600 mb-2 dark:text-gray-400">Need help with registration?</p>
-            <div className="flex justify-center space-x-4">
-              <a
-                href="tel:+1 (555) 123-4567"
-                className="text-blue-600 hover:text-blue-700 font-medium dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                📞 +1 (555) 123-4567
-              </a>
-              <a
-                href="mailto:contact@medicalclinic.com"
-                className="text-blue-600 hover:text-blue-700 font-medium dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                ✉️ contact@medicalclinic.com
-              </a>
             </div>
           </div>
-        </div>
-      </div>
+
+          {/* Trust indicators */}
+          <div className="flex items-center justify-center gap-6 text-[11px] text-slate-400 dark:text-slate-600">
+            <span className="flex items-center gap-1.5">
+              <Shield className="w-3 h-3" /> SSL Encrypted
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Fingerprint className="w-3 h-3" /> HIPAA Compliant
+            </span>
+          </div>
+        </motion.div>
+      </section>
     </div>
   );
 }

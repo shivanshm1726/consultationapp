@@ -17,7 +17,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar"
-import { LayoutDashboard, Calendar, Users, DollarSign, LogOut, Bell, Stethoscope, Phone, Clock, UserCheck } from "lucide-react"
+import { LayoutDashboard, Calendar, Users, DollarSign, LogOut, Bell, Stethoscope, Phone, Clock, UserCheck, MessageSquare } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -31,7 +31,7 @@ interface DoctorLayoutProps {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
 const CHAT_API = `${API_BASE_URL}/api/chats`;
-export default function AdminLayoutClient({ children }: DoctorLayoutProps) {
+export default function DoctorLayout({ children }: DoctorLayoutProps) {
   const { user, userData, logout } = useAuth()
   const [waitingPatients, setWaitingPatients] = useState<number>(0)
   const [isOnline, setIsOnline] = useState<boolean>(userData?.isAvailableOnline ?? true)
@@ -83,20 +83,39 @@ export default function AdminLayoutClient({ children }: DoctorLayoutProps) {
     {
       title: "Dashboard",
       icon: LayoutDashboard,
-      href: "/admin",
-      isActive: pathname === "/admin",
+      href: "/doctor",
+      isActive: pathname === "/doctor",
     },
     {
-      title: "Pending Approvals",
-      icon: UserCheck,
-      href: "/admin/doctors",
-      isActive: pathname === "/admin/doctors",
+      title: "Messages",
+      icon: MessageSquare,
+      href: "/doctor/messages",
+      isActive: pathname === "/doctor/messages",
+      badge: waitingPatients > 0 ? waitingPatients : undefined,
     },
     {
-      title: "Platform Revenue",
-      icon: DollarSign,
-      href: "/admin/revenue",
-      isActive: pathname === "/admin/revenue",
+      title: "Calls",
+      icon: Phone,
+      href: "/doctor/calls",
+      isActive: pathname === "/doctor/calls",
+    },
+    {
+      title: "Appointments",
+      icon: Calendar,
+      href: "/doctor/appointments",
+      isActive: pathname === "/doctor/appointments",
+    },
+    {
+      title: "Schedule",
+      icon: Clock,
+      href: "/doctor/schedule",
+      isActive: pathname === "/doctor/schedule",
+    },
+    {
+      title: "Patients Data",
+      icon: Users,
+      href: "/doctor/patients",
+      isActive: pathname === "/doctor/patients",
     },
   ]
 
@@ -114,8 +133,8 @@ export default function AdminLayoutClient({ children }: DoctorLayoutProps) {
                 <Stethoscope className="h-5 w-5 text-white" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Admin Panel</h2>
-                <p className="text-sm text-slate-600 dark:text-slate-400">System Dashboard</p>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Doctor Panel</h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400">Medical Dashboard</p>
               </div>
             </motion.div>
           </SidebarHeader>
@@ -137,6 +156,11 @@ export default function AdminLayoutClient({ children }: DoctorLayoutProps) {
                       >
                         <item.icon className="h-5 w-5 transition-transform group-hover:scale-110" />
                         <span className="font-medium">{item.title}</span>
+                        {item.badge && (
+                          <Badge variant="destructive" className="ml-auto animate-pulse">
+                            {item.badge}
+                          </Badge>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -155,9 +179,9 @@ export default function AdminLayoutClient({ children }: DoctorLayoutProps) {
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
-                    {userData?.fullName || "Administrator"}
+                    {userData?.fullName || "Doctor"}
                   </p>
-                  <p className="text-xs text-slate-600 dark:text-slate-400">System Admin</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">Physician</p>
                 </div>
               </div>
 
@@ -177,6 +201,24 @@ export default function AdminLayoutClient({ children }: DoctorLayoutProps) {
           <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 px-6 bg-white dark:bg-slate-900">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="-ml-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors" />
+            </div>
+            
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2 border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-1.5 rounded-full shadow-sm">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  {isOnline ? 'Accepting Patients' : 'Offline'}
+                </span>
+                <Switch checked={isOnline} onCheckedChange={handleToggleOnline} className={isOnline ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'} />
+              </div>
+              
+              {waitingPatients > 0 && (
+              <div className="flex items-center space-x-2 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 px-3 py-1.5 rounded-full border border-amber-200 dark:border-amber-800/30">
+                <Bell className="h-4 w-4 animate-pulse" />
+                <span className="text-sm font-medium">
+                  {waitingPatients} active session{waitingPatients > 1 ? "s" : ""}
+                </span>
+              </div>
+            )}
             </div>
           </header>
 

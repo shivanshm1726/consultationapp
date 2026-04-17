@@ -1,13 +1,14 @@
 import express from 'express';
-import { getSchedule, updateSchedule, getAvailableSlots } from '../controllers/scheduleController.js';
+import { getClinicSchedules, getDoctorSchedule, upsertDoctorSchedule } from '../controllers/scheduleController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
-router.route('/:doctorId')
-  .get(protect, getSchedule)
-  .put(protect, updateSchedule);
+router.route('/')
+  .get(protect, getClinicSchedules)
+  .put(protect, upsertDoctorSchedule); // Receptionist creates/updates a schedule
 
-router.get('/slots/:doctorId', getAvailableSlots);
+router.route('/:doctorId')
+  .get(protect, getDoctorSchedule);
 
 export default router;

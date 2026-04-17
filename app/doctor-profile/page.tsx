@@ -190,7 +190,7 @@ export default function DoctorProfile() {
                           Book Appointment
                         </Button>
                       </Link>
-                      <Link href="/chat" className="flex-1">
+                      <Link href="/profile" className="flex-1">
                         <Button
                           variant="outline"
                           className="w-full bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm"

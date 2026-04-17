@@ -4,10 +4,13 @@ import { protect } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
+// GET all chat sessions (inbox) for the logged-in user
 router.get('/sessions', protect, getAllSessions);
 
-router.route('/:roomId')
-  .get(protect, getMessages)
-  .post(protect, sendMessage);
+// GET messages for a specific room
+router.get('/:roomId', protect, getMessages);
+
+// POST a new message (roomId in body)
+router.post('/', protect, sendMessage);
 
 export default router;
